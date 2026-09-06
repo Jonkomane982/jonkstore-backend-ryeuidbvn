@@ -92,6 +92,7 @@ const environment = Object.freeze({
   firebase: Object.freeze({
     projectId: process.env.FIREBASE_PROJECT_ID || '',
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+    privateKey: process.env.FIREBASE_PRIVATE_KEY || '',
     privateKeyBase64: process.env.FIREBASE_PRIVATE_KEY_BASE64 || '',
     serviceAccountBase64: process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 || '',
     storageBucket: process.env.FIREBASE_STORAGE_BUCKET || '',
@@ -106,16 +107,12 @@ function validateProductionEnvironment() {
     ['OWNER_EMAIL', environment.ownerEmail],
     ['FIREBASE_PROJECT_ID', environment.firebase.projectId],
     ['FIREBASE_CLIENT_EMAIL', environment.firebase.clientEmail],
-    ['FIREBASE_PRIVATE_KEY_BASE64 or FIREBASE_SERVICE_ACCOUNT_BASE64',
-      environment.firebase.privateKeyBase64 || environment.firebase.serviceAccountBase64],
-    ['DB_STORE_HOST', process.env.DB_STORE_HOST],
-    ['DB_STORE_NAME', process.env.DB_STORE_NAME],
-    ['DB_STORE_USER', process.env.DB_STORE_USER],
-    ['DB_STORE_PASSWORD', process.env.DB_STORE_PASSWORD],
-    ['DB_AI_HOST', process.env.DB_AI_HOST],
-    ['DB_AI_NAME', process.env.DB_AI_NAME],
-    ['DB_AI_USER', process.env.DB_AI_USER],
-    ['DB_AI_PASSWORD', process.env.DB_AI_PASSWORD],
+    ['FIREBASE_PRIVATE_KEY (or Base64)',
+      environment.firebase.privateKey ||
+      environment.firebase.privateKeyBase64 ||
+      environment.firebase.serviceAccountBase64],
+    ['DB_STORE_URL or Host', process.env.DB_STORE_URL || process.env.DB_STORE_HOST],
+    ['DB_AI_URL or Host', process.env.DB_AI_URL || process.env.DB_AI_HOST],
   ];
   const missing = required.filter(([, value]) => !value).map(([name]) => name);
   if (missing.length) {
