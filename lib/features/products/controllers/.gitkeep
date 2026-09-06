@@ -1,0 +1,3 @@
+# Products Controllers
+# This folder houses the state management logic for the Products feature (e.g., Riverpod Notifiers, BLoCs, or GetX Controllers).
+# It acts as the bridge between the UI (Presentation) and the Domain/Data layers, handling user interactions and updating the view state.

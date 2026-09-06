@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "819218536036",
+    "project_id": "electrohub-db-4978b",
+    "storage_bucket": "electrohub-db-4978b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:819218536036:android:db9661e8d4b0d7c3a33171",
+        "android_client_info": {
+          "package_name": "com.example.electrohub"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "819218536036-rdkn6jrcoa989sdcokhkfu08c41qcscp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.electrohub",
+            "certificate_hash": "8bbe4d07cd668b7c593f909bd366c787613f0dbc"
+          }
+        },
+        {
+          "client_id": "819218536036-rok7pnbru2u915ldstcmueeii0l1h2si.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYwL_bTwvx6N9Mz6UTZu5l2rmtee4fHy8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "819218536036-rok7pnbru2u915ldstcmueeii0l1h2si.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "819218536036-re425c5c468nn2166bdseouh42obbvoq.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.electrohub.jonkstore"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

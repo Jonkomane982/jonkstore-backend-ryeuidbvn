@@ -1,0 +1,1341 @@
+You are a Principal AI Database Architect, Data Engineer, PostgreSQL Expert, and AI Systems Architect.
+
+We are now building the SECOND PostgreSQL database for JonkStore:
+
+JONKAI PostgreSQL
+
+This database is completely separate from:
+
+JonkStore PostgreSQL
+
+============================================================
+IMPORTANT ARCHITECTURAL BOUNDARY
+============================================================
+
+JonkStore PostgreSQL
+=
+Operational application database.
+
+JonkAI PostgreSQL
+=
+Analytical, historical, knowledge, memory, reasoning, and AI-output database.
+
+DO NOT merge them.
+
+DO NOT create JonkAI tables inside JonkStore PostgreSQL.
+
+DO NOT make JonkAI the operational POS database.
+
+JonkStore PostgreSQL remains responsible for operational business transactions.
+
+JonkAI PostgreSQL is responsible for intelligence.
+
+============================================================
+DATA FLOW
+============================================================
+
+The intended architecture is:
+
+Android / Windows
+        ↓
+SQLite
+        ↓
+Existing POS synchronization
+        ↓
+JonkStore PostgreSQL
+        ↓
+JonkAI Data Pipeline
+        ↓
+JonkAI PostgreSQL
+        ↓
+Python
++
+Prolog
++
+OpenAI
+        ↓
+Jonk AI
+
+JonkAI may ALSO receive authorized information from:
+
+• Firestore
+• SQLite/offline events
+• JonkStore PostgreSQL
+• trusted backend events
+
+However, JonkAI must have a controlled data-access architecture.
+
+Do NOT provide unrestricted database access to AI components.
+
+============================================================
+SOURCE OF TRUTH
+============================================================
+
+Inspect the existing JonkStore PostgreSQL schema before designing JonkAI.
+
+Use the ACTUAL JonkStore PostgreSQL schema as the reference for:
+
+• businesses
+• branches
+• products
+• categories
+• suppliers
+• purchases
+• inventory
+• customers
+• sales
+• payments
+• expenses
+• employees
+• users
+• barcode information
+• security/activity information
+• notifications
+• synchronization metadata
+
+Do NOT invent relationships that conflict with the existing JonkStore PostgreSQL schema.
+
+If something is missing from the JonkStore schema, clearly document the dependency.
+
+============================================================
+SINGLE FILE REQUIREMENT
+============================================================
+
+Create ONE complete PostgreSQL schema file:
+
+jonkai_schema.sql
+
+The file must be ordered so that it can be executed from an empty PostgreSQL database successfully.
+
+Do NOT split it into multiple files.
+
+The file must contain:
+
+• extensions
+• schemas/namespaces
+• types/enums
+• tables
+• constraints
+• indexes
+• functions
+• procedures where justified
+• triggers where justified
+• views
+• materialized views where justified
+• RLS policies where appropriate
+• comments/documentation
+• migration/version metadata
+• validation queries
+
+============================================================
+AI DATABASE DESIGN
+============================================================
+
+Design the database around the following logical layers:
+
+1. INGESTION
+2. RAW EVENTS
+3. NORMALIZED CORE
+4. ANALYTICAL FACTS
+5. DIMENSIONS
+6. METRICS
+7. FEATURES
+8. KNOWLEDGE
+9. BUSINESS RULES
+10. MEMORY
+11. SECURITY ANALYTICS
+12. AI OUTPUTS
+13. MODEL / REASONING RUNS
+14. CONVERSATIONS
+15. AUDIT / LINEAGE
+
+Do not mix these layers unnecessarily.
+
+============================================================
+TENANCY
+============================================================
+
+JonkStore supports multiple independent businesses.
+
+Every business-related JonkAI record must be associated with:
+
+business_id
+
+Where appropriate:
+
+branch_id
+user_id
+employee_id
+device_id
+
+JonkAI must NEVER mix data between businesses.
+
+Use strong tenant isolation.
+
+Evaluate and use PostgreSQL Row-Level Security where appropriate.
+
+============================================================
+SOURCE LINEAGE
+============================================================
+
+EVERY ingested fact/event must be traceable to its source.
+
+Support fields such as:
+
+event_id
+
+source_system
+
+source_record_id
+
+source_event_id
+
+source_version
+
+business_id
+
+branch_id
+
+user_id
+
+employee_id
+
+device_id
+
+event_type
+
+event_timestamp
+
+ingested_at
+
+processing_status
+
+payload_hash
+
+idempotency_key
+
+Do not duplicate the same event during retries.
+
+============================================================
+INGESTION
+============================================================
+
+Create a robust ingestion architecture.
+
+Support ingestion from:
+
+JonkStore PostgreSQL
+
+Firestore
+
+SQLite-derived synchronization events
+
+Trusted backend services
+
+Create appropriate ingestion tables.
+
+Track:
+
+• received
+• validated
+• accepted
+• processed
+• rejected
+• failed
+• retrying
+
+Store error information safely.
+
+============================================================
+RAW EVENTS
+============================================================
+
+Create a generalized event foundation for events such as:
+
+ProductCreated
+
+ProductUpdated
+
+ProductDeleted
+
+PurchaseCreated
+
+PurchaseReceived
+
+InventoryChanged
+
+InventoryAdjusted
+
+InventoryCounted
+
+CustomerCreated
+
+CustomerUpdated
+
+SaleCreated
+
+SaleCompleted
+
+SaleReturned
+
+PaymentCompleted
+
+ExpenseRecorded
+
+BarcodeScanned
+
+BarcodeUnknown
+
+BarcodeMismatch
+
+StockLow
+
+StockOut
+
+NotificationCreated
+
+UserLogin
+
+SecurityEvent
+
+DeviceEvent
+
+SyncCompleted
+
+SyncFailed
+
+Do NOT classify events as fraudulent in the ingestion layer.
+
+Store facts.
+
+============================================================
+ANALYTICAL FACTS
+============================================================
+
+Create analytical structures for:
+
+Sales
+
+Sale Items
+
+Purchases
+
+Purchase Items
+
+Inventory Events
+
+Inventory Snapshots
+
+Payments
+
+Customers
+
+Products
+
+Employees
+
+Expenses
+
+Returns
+
+Discounts
+
+Taxes
+
+Barcode Events
+
+Security Events
+
+Business Events
+
+The schema must preserve historical values.
+
+Do not overwrite historical values with current values.
+
+============================================================
+DIMENSIONS
+============================================================
+
+Create dimension structures where appropriate for:
+
+Business
+
+Branch
+
+Product
+
+Category
+
+Supplier
+
+Customer
+
+Employee
+
+Device
+
+Date
+
+Time
+
+Payment Method
+
+Barcode
+
+Do not duplicate unnecessarily.
+
+Use a consistent analytical model.
+
+============================================================
+TIME DIMENSION
+============================================================
+
+Create a proper date/time analytical structure if useful.
+
+Support:
+
+• day
+• week
+• month
+• quarter
+• year
+• day of week
+• weekend
+• business period
+
+Enable efficient time-based analytics.
+
+============================================================
+PRODUCT ANALYTICS
+============================================================
+
+Prepare storage/structures for:
+
+• Units sold
+• Revenue
+• Cost
+• Gross profit
+• Profit margin
+• Inventory turnover
+• Sales velocity
+• Stock-out frequency
+• Low-stock frequency
+• Return rate
+• Discount rate
+• Purchase frequency
+• Barcode scan frequency
+
+============================================================
+SALES ANALYTICS
+============================================================
+
+Support:
+
+• Daily sales
+• Weekly sales
+• Monthly sales
+• Yearly sales
+• Revenue trends
+• Gross profit trends
+• Transaction counts
+• Average transaction value
+• Units per transaction
+• Discounts
+• Returns
+• Payment methods
+• Employee performance
+• Branch performance
+
+============================================================
+INVENTORY ANALYTICS
+============================================================
+
+Support:
+
+• Current stock
+• Historical stock
+• Inventory value
+• Stock velocity
+• Stock turnover
+• Low-stock frequency
+• Out-of-stock frequency
+• Adjustment frequency
+• Damage frequency
+• Transfer frequency
+• Days of inventory remaining
+• Historical landed cost
+
+============================================================
+PURCHASE ANALYTICS
+============================================================
+
+Support:
+
+• Supplier purchase volume
+• Purchase frequency
+• Purchase cost
+• Runner fees
+• Landed cost
+• Supplier lead time where available
+• Supplier reliability metrics
+• Price changes
+• Purchase quantity trends
+
+============================================================
+CUSTOMER ANALYTICS
+============================================================
+
+Support:
+
+• Purchase frequency
+• Total spending
+• Average order value
+• Last purchase
+• Purchase interval
+• Return frequency
+• Loyalty activity
+• Customer lifetime value where appropriate
+• Churn/inactivity indicators
+
+Do NOT unnecessarily store sensitive personal information.
+
+============================================================
+EMPLOYEE ANALYTICS
+============================================================
+
+Support factual metrics such as:
+
+• Sales count
+• Sales value
+• Returns
+• Discounts
+• Stock adjustments
+• Failed authorizations
+• Login activity
+• Barcode activity
+
+Do not label behavior as malicious automatically.
+
+============================================================
+BARCODE INTELLIGENCE FOUNDATION
+============================================================
+
+Barcode intelligence is a major Jonk AI feature.
+
+Create dedicated structures for barcode events.
+
+Store:
+
+• barcode_value
+• barcode_type
+• product_id
+• business_id
+• branch_id
+• user_id
+• employee_id
+• device_id
+• scan_timestamp
+• scan_source
+• scan_result
+• related_sale_id
+• related_inventory_event_id
+• validation_result
+
+Possible result values:
+
+VALID
+
+UNKNOWN
+
+INACTIVE_PRODUCT
+
+STOCK_UNAVAILABLE
+
+MISMATCH
+
+ERROR
+
+Prepare the data for future Python analysis and Prolog reasoning.
+
+The barcode scanner itself is NOT implemented here.
+
+============================================================
+SECURITY ANALYTICS
+============================================================
+
+Create factual security event structures.
+
+Examples:
+
+• Failed login
+• Failed sale authorization
+• Repeated PIN failure
+• Unusual barcode frequency
+• Large discount
+• Large quantity
+• Unexpected inventory adjustment
+• Frequent refunds
+• Device changes
+• Unusual activity timing
+
+IMPORTANT:
+
+Do not call an event "fraud" simply because it is unusual.
+
+Store observations.
+
+Future Python and Prolog layers will make decisions.
+
+============================================================
+METRICS
+============================================================
+
+Create tables or materialized structures for derived metrics.
+
+Examples:
+
+ai_product_metrics
+
+ai_sales_metrics
+
+ai_inventory_metrics
+
+ai_customer_metrics
+
+ai_supplier_metrics
+
+ai_employee_metrics
+
+ai_business_metrics
+
+Metrics must have:
+
+• business scope
+• time period
+• calculation timestamp
+• source/metric version
+
+Allow metrics to be recomputed.
+
+============================================================
+FEATURE STORE
+============================================================
+
+Prepare an AI feature layer.
+
+Support future features such as:
+
+• Average daily sales
+• Sales velocity
+• Demand trend
+• Stock coverage days
+• Price trend
+• Customer activity score
+• Return rate
+• Discount behavior
+• Barcode anomaly score
+• Inventory volatility
+• Supplier reliability score
+
+Do NOT generate fake values.
+
+Features must be derived from real data.
+
+============================================================
+KNOWLEDGE BASE
+============================================================
+
+Create a structured Jonk AI knowledge layer.
+
+It must distinguish between:
+
+GENERAL KNOWLEDGE
+
+BUSINESS KNOWLEDGE
+
+USER-PROVIDED KNOWLEDGE
+
+SYSTEM KNOWLEDGE
+
+APPROVED RULES
+
+LEARNED PATTERNS
+
+Do not mix them.
+
+Each knowledge item should support:
+
+• source
+• confidence
+• approval status
+• created timestamp
+• updated timestamp
+• business scope where applicable
+
+============================================================
+BUSINESS MEMORY
+============================================================
+
+Jonk AI should eventually remember approved business-specific information.
+
+Prepare structures for:
+
+• Business preferences
+• User preferences
+• Approved business rules
+• Frequently used interpretations
+• Business terminology
+• Store-specific practices
+
+Do NOT automatically trust every conversational statement as permanent knowledge.
+
+Use approval/state fields.
+
+============================================================
+BUSINESS RULES
+============================================================
+
+Prepare structured storage for rules that Prolog can later consume.
+
+Examples:
+
+Stock falls below threshold
+
+Require authorization above discount threshold
+
+Flag repeated failed authorization
+
+Restock when demand and stock conditions meet criteria
+
+Rules should support:
+
+• name
+• description
+• priority
+• enabled/disabled
+• business scope
+• rule version
+• source
+• approval status
+• conditions
+• actions
+
+DO NOT implement Prolog yet.
+
+============================================================
+PROLOG SUPPORT
+============================================================
+
+Design the database so normalized facts can later be converted into Prolog predicates.
+
+Examples:
+
+product(p47).
+
+stock(p47, 5).
+
+minimum_stock(p47, 10).
+
+supplier_active(p47).
+
+average_daily_sales(p47, 4.5).
+
+Do not store Prolog source code as the primary representation of business data.
+
+Store structured facts.
+
+============================================================
+PYTHON SUPPORT
+============================================================
+
+Prepare the database for Python analytics and machine learning.
+
+Python will later use JonkAI PostgreSQL for:
+
+• forecasting
+• statistics
+• anomaly detection
+• feature engineering
+• model training
+• evaluation
+• predictions
+
+Create appropriate model-run metadata.
+
+============================================================
+AI OUTPUTS
+============================================================
+
+Create structures for:
+
+• ai_predictions
+• ai_recommendations
+• ai_anomalies
+• ai_business_health
+• ai_rule_results
+• ai_model_runs
+• ai_explanations
+
+Every AI result must include:
+
+• business_id
+• relevant entity/reference
+• created_at
+• model/rule version
+• confidence where applicable
+• status
+• explanation/reference where appropriate
+• source data/version where possible
+
+AI outputs must be auditable.
+
+============================================================
+PREDICTION HISTORY
+============================================================
+
+Never overwrite predictions blindly.
+
+Preserve:
+
+• prediction time
+• forecast period
+• model version
+• input feature/version
+• predicted value
+• actual value when later known
+• prediction error where calculable
+
+This allows future model evaluation.
+
+============================================================
+AI RECOMMENDATIONS
+============================================================
+
+Support:
+
+• recommendation type
+• target entity
+• reason
+• evidence
+• confidence
+• priority
+• status
+• created timestamp
+• expiration
+• user feedback where applicable
+
+Examples:
+
+Restock Product
+
+Review Supplier
+
+Adjust Inventory
+
+Investigate Activity
+
+Review Price
+
+============================================================
+AI FEEDBACK
+============================================================
+
+Prepare feedback structures.
+
+Users should eventually be able to mark an AI recommendation:
+
+Helpful
+
+Not Helpful
+
+Correct
+
+Incorrect
+
+Dismissed
+
+Applied
+
+Feedback will later help improve the system.
+
+Do not automatically retrain models from feedback without validation.
+
+============================================================
+AI CONVERSATIONS
+============================================================
+
+Prepare storage for future Jonk AI conversations.
+
+Support:
+
+• conversation
+• user
+• business
+• branch where applicable
+• messages
+• timestamps
+• tool calls/references
+• data sources used
+• model version
+
+Do not store secrets.
+
+Do not store raw authentication credentials.
+
+============================================================
+OPENAI INTEGRATION BOUNDARY
+============================================================
+
+OpenAI will eventually be the natural-language interface/reasoning layer.
+
+DO NOT store OpenAI API keys in this database.
+
+Prepare metadata for:
+
+• provider
+• model
+• request ID
+• response ID
+• token/cost information where appropriate
+• latency
+• prompt/version identifiers
+• tool usage
+
+Do not store secrets.
+
+============================================================
+AI DATA ACCESS
+============================================================
+
+Create a controlled AI Data Gateway design.
+
+Future Python/Prolog/OpenAI services should NOT receive unrestricted database credentials.
+
+Prepare views/stored functions where appropriate that expose safe analytical data.
+
+Examples:
+
+get_sales_metrics()
+
+get_inventory_metrics()
+
+get_product_performance()
+
+get_customer_metrics()
+
+get_purchase_metrics()
+
+get_barcode_activity()
+
+get_security_events()
+
+get_business_health()
+
+Design these around authorized tenant/business access.
+
+============================================================
+FIRESTORE / SQLITE INGESTION
+============================================================
+
+JonkAI may receive data from:
+
+Firestore
+
+SQLite-derived events
+
+JonkStore PostgreSQL
+
+Backend events
+
+Every source must retain source metadata.
+
+Do not assume Firestore and PostgreSQL are always synchronized perfectly.
+
+Track ingestion state explicitly.
+
+============================================================
+DUPLICATE PROTECTION
+============================================================
+
+Implement strong idempotency.
+
+The same source event received multiple times must not create duplicate analytical facts.
+
+Use:
+
+• unique event IDs
+• source system
+• source record IDs
+• source version
+• idempotency keys
+• payload hashes where useful
+
+============================================================
+DATA QUALITY
+============================================================
+
+Implement constraints/validation for:
+
+• Missing business ID
+• Invalid source
+• Invalid timestamps
+• Invalid event types
+• Invalid numerical values
+• Impossible quantities
+• Invalid relationships
+
+Reject malformed data rather than silently corrupting the analytical database.
+
+============================================================
+RETENTION
+============================================================
+
+Separate data retention policies conceptually for:
+
+Raw events
+
+Normalized facts
+
+Metrics
+
+Features
+
+AI outputs
+
+Conversations
+
+Do not automatically delete historical business information without an explicit policy.
+
+============================================================
+PERFORMANCE
+============================================================
+
+This database will eventually contain large historical datasets.
+
+Optimize for:
+
+• time-range queries
+• business filtering
+• product analytics
+• inventory analytics
+• sales analytics
+• barcode analytics
+• event ingestion
+• AI feature retrieval
+
+Use:
+
+• B-tree indexes where appropriate
+• BRIN indexes for very large append-only timestamped tables where appropriate
+• GIN indexes where justified
+• composite indexes
+• partial indexes
+• partitioning for genuinely high-volume tables
+
+Do NOT blindly index everything.
+
+Document important index decisions.
+
+============================================================
+PARTITIONING
+============================================================
+
+Evaluate partitioning for large event/fact tables.
+
+Potential candidates:
+
+• barcode events
+• sales events
+• inventory events
+• security events
+• audit events
+
+Use a sensible strategy.
+
+If partitioning is not justified initially, document that decision.
+
+============================================================
+MATERIALIZED VIEWS
+============================================================
+
+Create materialized views only where they provide genuine analytical performance benefits.
+
+Examples:
+
+• daily product metrics
+• daily business metrics
+• monthly sales metrics
+• inventory trend metrics
+
+Provide refresh procedures.
+
+Do not make operational POS transactions depend on stale AI materialized views.
+
+============================================================
+FUNCTIONS
+============================================================
+
+Create useful PostgreSQL functions for:
+
+• ingestion
+• idempotency checks
+• metric retrieval
+• authorized data retrieval
+• time aggregation
+• feature retrieval
+• AI result storage where appropriate
+
+Functions must be transaction-safe.
+
+============================================================
+TRIGGERS
+============================================================
+
+Use triggers sparingly.
+
+Potential uses:
+
+• updated_at
+• audit records
+• ingestion status transitions
+• data lineage maintenance
+
+Do NOT hide complex AI business logic inside database triggers.
+
+============================================================
+ROW-LEVEL SECURITY
+============================================================
+
+Implement appropriate RLS where useful.
+
+Business A must never access Business B.
+
+AI services should only retrieve authorized tenant data.
+
+Document how application/session context is expected to be established.
+
+============================================================
+ROLES
+============================================================
+
+Design least-privilege database roles.
+
+Potential roles:
+
+jonkai_ingestion
+
+jonkai_analytics_readonly
+
+jonkai_service
+
+jonkai_migrations
+
+Do NOT grant superuser access to AI services.
+
+Python and Prolog should not have unrestricted database modification privileges.
+
+============================================================
+DATA GOVERNANCE
+============================================================
+
+Every derived AI result must be traceable to:
+
+• source data
+• calculation/model version
+• processing timestamp
+• business scope
+
+Support reproducibility.
+
+============================================================
+SCHEMA NAMESPACE
+============================================================
+
+Consider using PostgreSQL schemas/namespaces to separate logical layers.
+
+For example:
+
+jonkai_ingest
+
+jonkai_core
+
+jonkai_analytics
+
+jonkai_features
+
+jonkai_knowledge
+
+jonkai_rules
+
+jonkai_security
+
+jonkai_ai
+
+jonkai_audit
+
+Use namespaces only if they improve clarity and security.
+
+============================================================
+NO OPERATIONAL DUPLICATION
+============================================================
+
+Do not blindly copy the complete JonkStore PostgreSQL database.
+
+JonkAI needs historical/analytical representations.
+
+Where historical snapshots are necessary, preserve them intentionally.
+
+Explain the purpose of every major duplicated entity.
+
+============================================================
+NO MOCK DATA
+============================================================
+
+DO NOT insert:
+
+❌ Fake sales
+❌ Fake customers
+❌ Fake products
+❌ Fake barcode scans
+❌ Fake predictions
+❌ Fake recommendations
+❌ Fake security events
+❌ Fake metrics
+
+Only insert legitimate static reference/configuration data when required.
+
+============================================================
+SQL QUALITY
+============================================================
+
+The final SQL must:
+
+• Execute on a clean PostgreSQL database
+• Be ordered correctly
+• Avoid circular dependency problems
+• Use proper PostgreSQL syntax
+• Use appropriate numeric precision
+• Use TIMESTAMPTZ for event timestamps
+• Include comments for complex structures
+• Be maintainable
+• Be performant
+• Be secure
+
+============================================================
+VALIDATION
+============================================================
+
+After generating jonkai_schema.sql:
+
+Actually validate it.
+
+Create/target a clean PostgreSQL database.
+
+Execute the complete SQL file.
+
+Verify:
+
+• Extensions
+• Schemas
+• Tables
+• Enums
+• Constraints
+• Foreign keys
+• Indexes
+• Functions
+• Procedures
+• Triggers
+• Views
+• Materialized views
+• RLS policies
+• Roles/grants where applicable
+
+Run representative EXPLAIN / EXPLAIN ANALYZE checks for important analytical queries.
+
+Verify duplicate event prevention.
+
+Verify tenant isolation.
+
+Verify that malformed ingestion is rejected.
+
+============================================================
+DOCUMENTATION
+============================================================
+
+Inside the SQL itself, add comments explaining important architectural decisions.
+
+Also generate:
+
+JONKAI_DATABASE_ARCHITECTURE.md
+
+This document should explain:
+
+• Purpose of JonkAI PostgreSQL
+• Difference from JonkStore PostgreSQL
+• Data flow
+• Source systems
+• Ingestion
+• Event model
+• Fact/dimension model
+• Metrics
+• Features
+• Knowledge
+• Memory
+• Rules
+• AI outputs
+• Python access
+• Prolog access
+• OpenAI boundary
+• Security
+• Tenant isolation
+• Performance
+• Partitioning
+• Retention
+• Data lineage
+
+============================================================
+FINAL OUTPUT
+============================================================
+
+Provide:
+
+1. jonkai_schema.sql
+2. JONKAI_DATABASE_ARCHITECTURE.md
+3. Verification SQL/scripts
+4. Complete table list
+5. Complete relationship summary
+6. Complete index summary
+7. Function summary
+8. Procedure summary
+9. Trigger summary
+10. View summary
+11. Materialized view summary
+12. RLS/security summary
+13. Data lineage strategy
+14. Idempotency strategy
+15. Python integration boundary
+16. Prolog integration boundary
+17. OpenAI integration boundary
+18. Any unresolved design issues
+
+============================================================
+CRITICAL FINAL RULE
+============================================================
+
+Do NOT implement:
+
+❌ Python
+❌ Prolog
+❌ OpenAI API
+❌ AI Chat
+❌ Forecasting
+❌ Recommendations
+❌ Fraud detection
+
+This task is ONLY the COMPLETE JONKAI POSTGRESQL DATABASE SCHEMA AND ITS FOUNDATION.
+
+Use the actual JonkStore PostgreSQL schema as the operational source reference.
+
+Do not silently modify JonkStore PostgreSQL.
+
+Do not claim success unless jonkai_schema.sql has actually been validated against a clean PostgreSQL database.

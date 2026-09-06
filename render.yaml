@@ -1,0 +1,79 @@
+databases:
+  - name: jonkstore-db
+    databaseName: JonkStore_Postgre
+    user: postgres
+    plan: free
+  - name: jonkai-db
+    databaseName: JonkAI
+    user: postgres
+    plan: free
+
+services:
+  # Node.js Operational API (backend)
+  - type: web
+    name: jonkstore-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: API_PREFIX
+        value: /api
+      - key: LOG_PRETTY
+        value: "false"
+      - key: DB_STORE_URL
+        fromDatabase:
+          name: jonkstore-db
+          property: connectionString
+      - key: DB_AI_URL
+        fromDatabase:
+          name: jonkai-db
+          property: connectionString
+      - key: JONKAI_ENGINE_URL
+        value: http://jonkai-engine:10000
+      
+      # Secrets to be set manually in Render Dashboard during Blueprint setup
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: JonkStore
+      - key: SMTP_FROM_EMAIL
+        sync: false
+
+  # Python Intelligence Engine (ai)
+  - type: web
+    name: jonkai-engine
+    runtime: python
+    rootDir: ai
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    autoDeployTrigger: commit
+    envVars:
+      - key: JONKAI_DATABASE_URL
+        fromDatabase:
+          name: jonkai-db
+          property: connectionString
+      - key: LOG_LEVEL
+        value: INFO
+      - key: ENV
+        value: production
+      - key: OPENAI_API_KEY
+        sync: false

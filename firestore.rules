@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // OTP Sessions — owner onboarding + password-reset verification flow
+    //
+    // Writes (create/update):
+    //   - Only an AUTHENTICATED user may create or update a session.
+    //   - On create, email MUST match the signed-in user's verified email,
+    //     OR (for onboarding where emailVerified is still false) match the
+    //     signed-in user's email exactly.
+    //
+    // Reads:
+    //   - Only the authenticated user whose email matches the session's email
+    //     field may read the document.
+    //
+    // Note: The CLIENT never stores the plaintext OTP — only the salted hash
+    // is written here (see OtpService.hashOtp in lib/core/services/otp_service.dart).
+    // -------------------------------------------------------------------------
+    match /otp_sessions/{sessionId} {
+      allow read: if request.auth != null &&
+          request.auth.token.email == resource.data.email;
+
+      allow create: if request.auth != null &&
+          request.resource.data.email is string &&
+          request.resource.data.email == request.auth.token.email &&
+          request.resource.data.keys().hasAll([
+            'session_id',
+            'username',
+            'email',
+            'otp_hash',
+            'otp_salt',
+            'attempts_used',
+            'is_verified',
+            'is_invalidated',
+            'created_at',
+            'expires_at',
+            'resend_count',
+          ]) &&
+          request.resource.data.attempts_used is int &&
+          request.resource.data.attempts_used == 0 &&
+          request.resource.data.is_verified is bool &&
+          request.resource.data.is_verified == false &&
+          request.resource.data.is_invalidated is bool &&
+          request.resource.data.is_invalidated == false;
+
+      allow update: if request.auth != null &&
+          resource.data.email == request.auth.token.email &&
+          request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly([
+                'attempts_used',
+                'is_verified',
+                'is_invalidated',
+                'verified_at',
+                'invalidated_reason',
+                'invalidated_at',
+              ]);
+
+      allow delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Firebase Trigger Email extension queue
+    //
+    // The Trigger Email extension (installed in Firebase Console) watches
+    // this collection and delivers each document via SMTP.
+    //
+    // Security model:
+    //   - ANY authenticated user may CREATE a mail document (they trigger an
+    //     email to THEIR own address).
+    //   - NO ONE may READ back mail documents (they contain the plaintext OTP
+    //     body). The extension has server-side access via service-account.
+    //   - NO ONE may UPDATE or DELETE mail documents after creation.
+    //   - The `to` list MUST contain the signed-in user's email.
+    // -------------------------------------------------------------------------
+    match /mail/{mailId} {
+      allow read: if false;
+
+      allow create: if request.auth != null &&
+          request.resource.data.to is list &&
+          request.resource.data.to.hasAny([request.auth.token.email]) &&
+          request.resource.data.message is map &&
+          request.resource.data.message.subject is string &&
+          (request.resource.data.message.text is string ||
+           request.resource.data.message.html is string);
+
+      allow update, delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Owner password-hash cloud backup — used for cross-device sync + recovery
+    //
+    // Security model:
+    //   - ONLY the owner whose firebase UID (or email as fallback) matches the
+    //     document ID may read or write this document.
+    //   - Values stored here are SALTED+HASHED (SHA-256) digests only —
+    //     plaintext passwords are NEVER persisted.
+    //   - Deletes disallowed (accidental deletion would break recovery).
+    // -------------------------------------------------------------------------
+    match /owner_passwords/{docId} {
+      allow read: if request.auth != null &&
+          (docId == request.auth.uid || docId == request.auth.token.email);
+
+      allow create, update: if request.auth != null &&
+          (docId == request.auth.uid || docId == request.auth.token.email) &&
+          request.resource.data.email is string &&
+          request.resource.data.email == request.auth.token.email &&
+          request.resource.data.password_hash is string &&
+          request.resource.data.updated_at is string &&
+          (request.resource.data.created_at is string || resource != null);
+
+      allow delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Default: deny everything not explicitly allowed above.
+    // Production deployments should add per-collection rules as new features
+    // (business, products, inventory sync, etc.) are introduced.
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

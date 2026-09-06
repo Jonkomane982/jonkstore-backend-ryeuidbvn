@@ -1,0 +1,75 @@
+name: jonkstore
+description: "A commercial-grade AI-powered Point of Sale (POS) application."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State Management
+  flutter_riverpod: ^2.5.1
+
+  # Navigation
+  go_router: ^14.2.1
+
+  # Networking
+  dio: ^5.5.0+1
+  connectivity_plus: ^6.0.3
+  cached_network_image: ^3.3.1
+
+  # Local Database & Persistence
+  sqflite: ^2.3.0
+  sqflite_common: ^2.5.0
+  sqflite_common_ffi: ^2.3.0
+  sqflite_common_ffi_web: 0.4.5+4
+  synchronized: ^3.4.0
+  path: ^1.9.0
+  path_provider: ^2.1.3
+  shared_preferences: ^2.2.3
+  flutter_secure_storage: ^9.2.2
+
+  # Firebase
+  firebase_core: ^3.1.1
+  firebase_auth: ^5.1.1
+  cloud_firestore: ^5.0.2
+  google_sign_in: ^6.2.1
+
+  # Utilities
+  intl: ^0.19.0
+  uuid: ^4.4.0
+  logger: ^2.3.0
+  crypto: ^3.0.3
+
+  # Hardware & Permissions
+  image_picker: ^1.1.2
+  permission_handler: ^11.3.1
+
+  # UI & Animations
+  flutter_animate: ^4.5.0
+  google_fonts: ^6.2.1
+  url_launcher: ^6.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  mocktail: ^1.0.4
+  faker: ^2.1.0
+
+flutter:
+  uses-material-design: true
+
+  # Asset registration for the architecture
+  assets:
+    - assets/JonkAI.png
+    - assets/images/
+    - assets/icons/
+    - assets/animations/
+    - assets/fonts/
+    - assets/sounds/
