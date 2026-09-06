@@ -73,32 +73,83 @@ class InventoryRepository {
 
   /**
    * Transfers stock between branches.
+   * Ensures WAC is preserved and movement is logged for AI analysis.
    */
   async transferStock(data) {
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
 
-      // 1. Deduct from Source
+      // 1. Lock and Fetch Source Inventory
       const fromInvRes = await client.query(
-        'SELECT id, quantity FROM inventory WHERE business_id = $1 AND branch_id = $2 AND product_id = $3 FOR UPDATE',
+        'SELECT id, quantity, weighted_average_cost FROM inventory WHERE business_id = $1 AND branch_id = $2 AND product_id = $3 FOR UPDATE',
         [data.business_id, data.from_branch_id, data.product_id]
       );
-      if (fromInvRes.rows[0].quantity < data.quantity) throw new Error('Insufficient stock for transfer');
 
-      await client.query('UPDATE inventory SET quantity = quantity - $1 WHERE id = $2', [data.quantity, fromInvRes.rows[0].id]);
+      if (fromInvRes.rows.length === 0 || fromInvRes.rows[0].quantity < data.quantity) {
+        throw new Error('Insufficient stock or product not found at source branch');
+      }
 
-      // 2. Add to Destination
+      const fromInv = fromInvRes.rows[0];
+      const sourceWac = fromInv.weighted_average_cost;
+
+      // 2. Deduct from Source
+      await client.query('UPDATE inventory SET quantity = quantity - $1 WHERE id = $2', [data.quantity, fromInv.id]);
+
+      // 3. Log TRANSFER_OUT
       await client.query(`
-        INSERT INTO inventory (business_id, branch_id, product_id, quantity)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (branch_id, product_id)
-        DO UPDATE SET quantity = inventory.quantity + EXCLUDED.quantity
-      `, [data.business_id, data.to_branch_id, data.product_id, data.quantity]);
+        INSERT INTO inventory_transactions (
+          business_id, branch_id, inventory_id, product_id, transaction_type,
+          reference_id, reference_type, previous_quantity, quantity_change,
+          resulting_quantity, unit_cost, user_id
+        ) VALUES ($1, $2, $3, $4, 'TRANSFER_OUT', $5, 'BRANCH_TRANSFER', $6, $7, $8, $9, $10)
+      `, [
+        data.business_id, data.from_branch_id, fromInv.id, data.product_id,
+        data.transfer_id || fromInv.id, fromInv.quantity, -data.quantity,
+        fromInv.quantity - data.quantity, sourceWac, data.user_id
+      ]);
+
+      // 4. Lock/Fetch/Create Destination Inventory
+      await client.query(`
+        INSERT INTO inventory (business_id, branch_id, product_id, quantity, weighted_average_cost)
+        VALUES ($1, $2, $3, 0, $4)
+        ON CONFLICT (branch_id, product_id) DO NOTHING
+      `, [data.business_id, data.to_branch_id, data.product_id, sourceWac]);
+
+      const toInvRes = await client.query(
+        'SELECT id, quantity, weighted_average_cost FROM inventory WHERE business_id = $1 AND branch_id = $2 AND product_id = $3 FOR UPDATE',
+        [data.business_id, data.to_branch_id, data.product_id]
+      );
+      const toInv = toInvRes.rows[0];
+
+      // 5. Update Destination (WAC Recalculation)
+      const newToQty = parseFloat(toInv.quantity) + parseFloat(data.quantity);
+      // If we move stock at cost, we blend it into the destination WAC
+      const newToWac = ((parseFloat(toInv.quantity) * parseFloat(toInv.weighted_average_cost)) + (parseFloat(data.quantity) * parseFloat(sourceWac))) / newToQty;
+
+      await client.query(
+        'UPDATE inventory SET quantity = $1, weighted_average_cost = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+        [newToQty, newToWac, toInv.id]
+      );
+
+      // 6. Log TRANSFER_IN
+      await client.query(`
+        INSERT INTO inventory_transactions (
+          business_id, branch_id, inventory_id, product_id, transaction_type,
+          reference_id, reference_type, previous_quantity, quantity_change,
+          resulting_quantity, unit_cost, user_id
+        ) VALUES ($1, $2, $3, $4, 'TRANSFER_IN', $5, 'BRANCH_TRANSFER', $6, $7, $8, $9, $10)
+      `, [
+        data.business_id, data.to_branch_id, toInv.id, data.product_id,
+        data.transfer_id || toInv.id, toInv.quantity, data.quantity,
+        newToQty, sourceWac, data.user_id
+      ]);
 
       await client.query('COMMIT');
+      return { status: 'success' };
     } catch (err) {
       await client.query('ROLLBACK');
+      logger.error({ err, data }, 'InventoryRepository: transferStock failed');
       throw err;
     } finally {
       client.release();
