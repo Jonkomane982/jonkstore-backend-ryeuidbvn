@@ -1,11 +1,11 @@
 databases:
   - name: jonkstore-db
-    databaseName: JonkStore_Postgre
-    user: postgres
+    databaseName: jonkstore
+    user: jonkadmin
     plan: free
   - name: jonkai-db
-    databaseName: JonkAI
-    user: postgres
+    databaseName: jonkai
+    user: jonkadmin
     plan: free
 
 services:
