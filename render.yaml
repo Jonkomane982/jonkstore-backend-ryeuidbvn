@@ -1,13 +1,3 @@
-databases:
-  - name: jonkstore-db
-    databaseName: jonkstore
-    user: jonkadmin
-    plan: free
-  - name: jonkai-db
-    databaseName: jonkai
-    user: jonkadmin
-    plan: free
-
 services:
   # 1. Node.js Operational API (backend)
   - type: web
@@ -27,14 +17,13 @@ services:
         value: /api
       - key: LOG_PRETTY
         value: "false"
+      
+      # Database URLs (Paste your manual Render DB URLs in the Render Dashboard)
       - key: DB_STORE_URL
-        fromDatabase:
-          name: jonkstore-db
-          property: connectionString
+        sync: false
       - key: DB_AI_URL
-        fromDatabase:
-          name: jonkai-db
-          property: connectionString
+        sync: false
+      
       - key: JONKAI_ENGINE_URL
         value: http://jonkai-engine:10000
       
@@ -57,8 +46,10 @@ services:
         value: JonkStore
       - key: SMTP_FROM_EMAIL
         sync: false
+      - key: OWNER_EMAIL
+        sync: false
 
-  # 2. Python Intelligence Engine (ai) - Using Docker for Prolog support
+  # 2. Python Intelligence Engine (ai)
   - type: web
     name: jonkai-engine
     runtime: docker
@@ -66,9 +57,7 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: JONKAI_DATABASE_URL
-        fromDatabase:
-          name: jonkai-db
-          property: connectionString
+        sync: false
       - key: LOG_LEVEL
         value: INFO
       - key: ENV
