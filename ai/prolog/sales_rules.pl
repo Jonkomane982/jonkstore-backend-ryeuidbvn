@@ -1,4 +1,4 @@
-% Sales Rules
+% Sales Policy Logic
 
 % Rule: sales_drop_alert
 % Matches if revenue change is less than -20% and window is sufficient.

@@ -28,14 +28,7 @@ COPY --chown=jonkai:jonkai . .
 # Environment configuration
 ENV PATH="/home/jonkai/.local/bin:${PATH}"
 ENV PYTHONUNBUFFERED=1
-ENV JONKAI_DATABASE_URL=""
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-# Expose internal API port
-EXPOSE 8000
-
-# Start application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start application using the dynamic Render port
+# Defaulting to 10000 if PORT is not set
+CMD ["sh", "-c", "python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"]
