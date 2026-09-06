@@ -1,3 +1,5 @@
+name: jonkstore-ecosystem
+
 databases:
   - name: jonkstore-db
     databaseName: JonkStore_Postgre
@@ -9,7 +11,7 @@ databases:
     plan: free
 
 services:
-  # Node.js Operational API (backend)
+  # 1. Node.js Operational API (backend)
   - type: web
     name: jonkstore-api
     runtime: node
@@ -38,7 +40,7 @@ services:
       - key: JONKAI_ENGINE_URL
         value: http://jonkai-engine:10000
       
-      # Secrets to be set manually in Render Dashboard during Blueprint setup
+      # Secrets to be set manually in Render Dashboard
       - key: JWT_SECRET
         generateValue: true
       - key: FIREBASE_PROJECT_ID
@@ -58,13 +60,11 @@ services:
       - key: SMTP_FROM_EMAIL
         sync: false
 
-  # Python Intelligence Engine (ai)
+  # 2. Python Intelligence Engine (ai) - Using Docker for Prolog support
   - type: web
     name: jonkai-engine
-    runtime: python
+    runtime: docker
     rootDir: ai
-    buildCommand: pip install -r requirements.txt
-    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
     autoDeployTrigger: commit
     envVars:
       - key: JONKAI_DATABASE_URL
