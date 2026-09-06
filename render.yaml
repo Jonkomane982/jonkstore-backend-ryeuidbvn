@@ -1,5 +1,3 @@
-name: jonkstore-ecosystem
-
 databases:
   - name: jonkstore-db
     databaseName: JonkStore_Postgre
