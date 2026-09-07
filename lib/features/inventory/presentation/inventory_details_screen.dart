@@ -125,7 +125,8 @@ class _InventoryDetailsScreenState extends ConsumerState<InventoryDetailsScreen>
   }
 
   Widget _buildDetailsCard(Inventory inventory, Product product) {
-    final valuation = inventory.quantity * (product.costPrice ?? 0);
+    final cost = product.costPrice ?? 0;
+    final valuation = inventory.quantity * cost;
     return PrimaryCard(
       child: Column(
         children: [
@@ -133,7 +134,7 @@ class _InventoryDetailsScreenState extends ConsumerState<InventoryDetailsScreen>
           _buildInfoRow('Barcode', product.barcode ?? 'N/A'),
           _buildInfoRow('Category ID', product.categoryId),
           const Divider(height: 32),
-          _buildInfoRow('Unit Cost', 'KES ${product.costPrice.toStringAsFixed(2) ?? '0.00'}'),
+          _buildInfoRow('Unit Cost', 'KES ${cost.toStringAsFixed(2)}'),
           _buildInfoRow('Inventory Value', 'KES ${valuation.toStringAsFixed(2)}', isBold: true),
           const Divider(height: 32),
           _buildInfoRow('Threshold', '${inventory.lowStockThreshold ?? 0} units'),

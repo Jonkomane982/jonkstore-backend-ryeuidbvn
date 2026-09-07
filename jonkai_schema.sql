@@ -1,6 +1,6 @@
 -- ============================================================================
 -- JONKAI POSTGRESQL DATABASE SCHEMA — FINAL PRODUCTION RELEASE
--- Version: 3.1.0 (Hardened, Prolog-Ready & AI-Enhanced)
+-- Version: 3.2.0 (Hardened, Prolog-Ready & AI-Enhanced)
 -- Principal AI Database Architect & Data Engineer
 -- ============================================================================
 
@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS jonkai_core.businesses (
     industry TEXT,
     source_version INTEGER NOT NULL,
     ingested_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN DEFAULT TRUE,
     payload JSONB
 );
@@ -118,6 +119,7 @@ CREATE TABLE IF NOT EXISTS jonkai_core.branches (
     code TEXT,
     source_version INTEGER NOT NULL,
     ingested_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN DEFAULT TRUE
 );
 
@@ -130,6 +132,7 @@ CREATE TABLE IF NOT EXISTS jonkai_core.products (
     selling_price NUMERIC(19, 4),
     source_version INTEGER NOT NULL,
     ingested_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN DEFAULT TRUE
 );
 
@@ -309,7 +312,8 @@ CREATE TABLE IF NOT EXISTS jonkai_chat.threads (
     user_id UUID NOT NULL,
     title TEXT,
     started_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    last_message_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    last_message_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS jonkai_chat.messages (
@@ -364,18 +368,65 @@ BEGIN
 END $$;
 
 -- -----------------------------------------------------------------------------
--- 013. PERFORMANCE INDEXES
+-- 013. AI-SPECIFIC PERFORMANCE INDEXES
 -- -----------------------------------------------------------------------------
 
+-- Core lookup indexes
 CREATE INDEX IF NOT EXISTS idx_fact_sales_timestamp ON jonkai_analytics.fact_sales(sale_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_ingest_source_lookup ON jonkai_ingest.payloads(source_system, source_record_id);
 CREATE INDEX IF NOT EXISTS idx_core_barcode_val ON jonkai_core.product_barcodes(barcode);
 CREATE INDEX IF NOT EXISTS idx_rules_business ON jonkai_rules.definitions(business_id, category, is_enabled);
 
+-- JSONB GIN Indexes for fast search within unstructured data
+CREATE INDEX IF NOT EXISTS idx_ingest_payload_gin ON jonkai_ingest.payloads USING GIN (payload);
+CREATE INDEX IF NOT EXISTS idx_rules_conditions_gin ON jonkai_rules.definitions USING GIN (conditions);
+CREATE INDEX IF NOT EXISTS idx_chat_tool_calls_gin ON jonkai_chat.messages USING GIN (tool_calls);
+
+-- Trigram Search for conversational memory and knowledge discovery
+CREATE INDEX IF NOT EXISTS idx_chat_messages_content_trgm ON jonkai_chat.messages USING GIN (content gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_ai_reco_reasoning_trgm ON jonkai_ai.recommendations USING GIN (reasoning gin_trgm_ops);
+
+-- Composite Indexes for multi-tenant reporting
+CREATE INDEX IF NOT EXISTS idx_fact_sales_biz_date ON jonkai_analytics.fact_sales(business_id, date_key);
+CREATE INDEX IF NOT EXISTS idx_core_sales_biz_date ON jonkai_core.sales(business_id, sale_date DESC);
+CREATE INDEX IF NOT EXISTS idx_core_inv_biz_prod ON jonkai_core.inventory(business_id, product_id, branch_id);
+
 -- -----------------------------------------------------------------------------
--- 014. MAINTENANCE PROCEDURES
+-- 014. TRIGGERS, FUNCTIONS & PROCEDURES
 -- -----------------------------------------------------------------------------
 
+-- 1. Automatic Timestamp Update Function
+CREATE OR REPLACE FUNCTION update_timestamp_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply timestamp triggers
+CREATE TRIGGER trg_update_biz_ts BEFORE UPDATE ON jonkai_core.businesses FOR EACH ROW EXECUTE FUNCTION update_timestamp_column();
+CREATE TRIGGER trg_update_prod_ts BEFORE UPDATE ON jonkai_core.products FOR EACH ROW EXECUTE FUNCTION update_timestamp_column();
+CREATE TRIGGER trg_update_chat_ts BEFORE UPDATE ON jonkai_chat.threads FOR EACH ROW EXECUTE FUNCTION update_timestamp_column();
+
+-- 2. Prolog Fact Generator (AI Reasoning Bridge)
+-- Converts product and inventory data into Prolog-style logic predicates
+CREATE OR REPLACE FUNCTION jonkai_core.get_prolog_facts(p_business_id UUID)
+RETURNS TABLE (predicate TEXT) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT format('product(''%s'', ''%s'', %s, %s).',
+           p.product_id,
+           replace(p.name, '''', ''''''),
+           coalesce(p.selling_price, 0),
+           i.quantity)
+    FROM jonkai_core.products p
+    JOIN jonkai_core.inventory i ON p.product_id = i.product_id
+    WHERE p.business_id = p_business_id AND p.is_active = TRUE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 3. Maintenance: Generate Time Dimension (0-86399 seconds)
 CREATE OR REPLACE PROCEDURE jonkai_analytics.generate_dim_time()
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -391,5 +442,46 @@ BEGIN
     END LOOP;
 END;
 $$;
+
+-- 4. Maintenance: Generate Date Dimension
+CREATE OR REPLACE PROCEDURE jonkai_analytics.generate_dim_date(p_start_year INTEGER, p_end_year INTEGER)
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_date DATE;
+BEGIN
+    FOR v_date IN SELECT generate_series(
+        format('%s-01-01', p_start_year)::DATE,
+        format('%s-12-31', p_end_year)::DATE,
+        '1 day'::interval
+    ) LOOP
+        INSERT INTO jonkai_analytics.dim_date (
+            date_key, full_date, day_name, day_of_week, is_weekend,
+            week_of_year, month_name, month_actual, quarter, year_actual
+        ) VALUES (
+            to_char(v_date, 'YYYYMMDD')::INTEGER,
+            v_date,
+            to_char(v_date, 'Day'),
+            extract(isodow from v_date),
+            CASE WHEN extract(isodow from v_date) IN (6, 7) THEN TRUE ELSE FALSE END,
+            extract(week from v_date),
+            to_char(v_date, 'Month'),
+            extract(month from v_date),
+            extract(quarter from v_date),
+            extract(year from v_date)
+        ) ON CONFLICT DO NOTHING;
+    END LOOP;
+END;
+$$;
+
+-- 5. AI Sales Velocity View (Feature Engineering)
+CREATE OR REPLACE VIEW jonkai_metrics.vw_product_velocity AS
+SELECT
+    business_id,
+    product_id,
+    sum(quantity) / 30.0 as avg_daily_velocity,
+    count(distinct sale_id) as sales_frequency,
+    sum(quantity * unit_price) as revenue_contribution
+FROM jonkai_core.sale_items
+GROUP BY business_id, product_id;
 
 COMMIT;

@@ -30,6 +30,7 @@ class PurchaseLocalDataSource {
 
   /// Retrieves and maps items for a specific purchase order.
   Future<List<PurchaseOrderItem>> getOrderItems(String orderId) async {
+    // FIX: Changed from non-existent getOrderItems to getOrderItemsWithDetails
     final results = await _dao.getOrderItemsWithDetails(orderId);
     return results.map((json) => PurchaseOrderItem.fromJson(json)).toList();
   }

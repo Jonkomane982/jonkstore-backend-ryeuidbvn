@@ -116,34 +116,31 @@ class OwnerService {
     return await _otpService.verifyOtp(sid, code);
   }
 
-  /// Implements Google Sign-In and synchronizes with the JonkStore Backend.
+  /// Signs in with Google and synchronizes identity with the Node.js backend.
   Future<Result<OwnerProfile>> signInWithGoogle() async {
     try {
       if (_useDevAuth) return Result.failure(const AuthFailure('Dev mode active'));
 
       final GoogleSignIn googleSignIn = GoogleSignIn();
-      final googleUser = await googleSignIn.signIn();
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       if (googleUser == null) return Result.failure(const AuthFailure('Cancelled'));
 
-      final googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      final userCredential = await _firebaseAuth!.signInWithCredential(credential);
-      final firebaseUser = userCredential.user;
+      final UserCredential userCredential = await _firebaseAuth!.signInWithCredential(credential);
+      final User? firebaseUser = userCredential.user;
       if (firebaseUser == null) throw Exception('Firebase Auth failed');
 
       final idToken = await firebaseUser.getIdToken();
 
-      // 1. Sync with Node.js Backend
+      // Synchronize with Render Backend
       final response = await _apiClient.post('/auth/login', data: {'idToken': idToken});
       
-      // 2. Materialize profile from backend data
       final profile = OwnerProfile.fromJson(response.data['data']['user']);
-      
-      // 3. Save locally to SQLite for offline access
       await _ownerRepository.saveProfile(profile);
 
       return Result.success(profile);
@@ -157,9 +154,10 @@ class OwnerService {
     required String password,
   }) async {
     try {
+      final existingResult = await _ownerRepository.getProfile();
+      final OwnerProfile? existing = existingResult.fold((p) => p, (_) => null);
+
       if (_useDevAuth) {
-        final existingResult = await _ownerRepository.getProfile();
-        final existing = existingResult.fold((p) => p, (_) => null);
         if (existing == null) return Result.failure(const AuthFailure('No profile'));
         return Result.success(existing);
       }
@@ -203,9 +201,14 @@ class OwnerService {
         passwordHash: reg.passwordHash,
       );
 
-      await _ownerRepository.saveProfile(profile, txn: txn);
-      _pendingReg = null;
-      return Result.success(profile);
+      final saveResult = await _ownerRepository.saveProfile(profile, txn: txn);
+      return saveResult.fold(
+        (_) {
+          _pendingReg = null;
+          return Result.success(profile);
+        },
+        (failure) => Result.failure(failure),
+      );
     } catch (e) {
       return Result.failure(DatabaseFailure(e.toString()));
     }
@@ -238,15 +241,28 @@ class OwnerService {
     return Result.success(null);
   }
 
+  static const int _kAuthMaxRetries = 3;
+
   Future<UserCredential> _signInOrCreateWithRetries({
     required bool create,
     required String email,
     required String password,
   }) async {
-    if (create) {
-      return await _firebaseAuth!.createUserWithEmailAndPassword(email: email, password: password);
-    } else {
-      return await _firebaseAuth!.signInWithEmailAndPassword(email: email, password: password);
+    Object? lastError;
+    for (int attempt = 0; attempt < _kAuthMaxRetries; attempt++) {
+      try {
+        if (create) {
+          return await _firebaseAuth!.createUserWithEmailAndPassword(email: email, password: password);
+        } else {
+          return await _firebaseAuth!.signInWithEmailAndPassword(email: email, password: password);
+        }
+      } catch (e) {
+        lastError = e;
+      }
+      if (attempt < _kAuthMaxRetries - 1) {
+        await Future<void>.delayed(Duration(milliseconds: 500 * (1 << attempt)));
+      }
     }
+    throw lastError!;
   }
 }

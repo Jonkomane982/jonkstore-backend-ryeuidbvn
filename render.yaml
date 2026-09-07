@@ -1,3 +1,13 @@
+databases:
+  - name: jonkstore-db
+    databaseName: jonkstore
+    user: jonkadmin
+    plan: free
+  - name: jonkai-db
+    databaseName: jonkai
+    user: jonkadmin
+    plan: free
+
 services:
   # 1. Node.js Operational API (backend)
   - type: web
@@ -17,19 +27,24 @@ services:
         value: /api
       - key: LOG_PRETTY
         value: "false"
+      - key: LOG_LEVEL
+        value: info
       
-      # Database URLs (Paste your manual Render DB URLs in the Render Dashboard)
+      # Database Connections
       - key: DB_STORE_URL
-        sync: false
+        fromDatabase:
+          name: jonkstore-db
+          property: connectionString
       - key: DB_AI_URL
-        sync: false
+        fromDatabase:
+          name: jonkai-db
+          property: connectionString
       
+      # Internal AI Engine Link
       - key: JONKAI_ENGINE_URL
         value: http://jonkai-engine:10000
       
-      # Secrets to be set manually in Render Dashboard
-      - key: JWT_SECRET
-        generateValue: true
+      # Firebase Admin SDK (Set in Render Dashboard)
       - key: FIREBASE_PROJECT_ID
         sync: false
       - key: FIREBASE_CLIENT_EMAIL
@@ -38,6 +53,14 @@ services:
         sync: false
       - key: FIREBASE_STORAGE_BUCKET
         sync: false
+      
+      # SMTP Configuration (Set in Render Dashboard)
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURE
+        value: "false"
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASS
@@ -46,8 +69,16 @@ services:
         value: JonkStore
       - key: SMTP_FROM_EMAIL
         sync: false
+
+      # App Settings
       - key: OWNER_EMAIL
         sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: BCRYPT_ROUNDS
+        value: "12"
+      - key: CORS_ORIGIN
+        value: "*"
 
   # 2. Python Intelligence Engine (ai)
   - type: web
@@ -57,10 +88,18 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: JONKAI_DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: jonkai-db
+          property: connectionString
       - key: LOG_LEVEL
         value: INFO
       - key: ENV
         value: production
+      
+      # OpenAI (Set in Render Dashboard)
       - key: OPENAI_API_KEY
         sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o
+      - key: FEATURE_WINDOW_DAYS
+        value: "30"
