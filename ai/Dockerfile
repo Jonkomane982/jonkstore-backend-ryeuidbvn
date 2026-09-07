@@ -2,10 +2,9 @@
 FROM python:3.10-slim-bullseye
 
 # Install system dependencies
-# swi-prolog-nox is used for a smaller footprint on servers (no X11)
+# We use swi-prolog which includes the necessary runtime for pyswip
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    swi-prolog-nox \
-    swi-prolog-dev \
+    swi-prolog \
     build-essential \
     libpq-dev \
     curl \
@@ -30,5 +29,4 @@ ENV PATH="/home/jonkai/.local/bin:${PATH}"
 ENV PYTHONUNBUFFERED=1
 
 # Start application using the dynamic Render port
-# Defaulting to 10000 if PORT is not set
 CMD ["sh", "-c", "python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"]
