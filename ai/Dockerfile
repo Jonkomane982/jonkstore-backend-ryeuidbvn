@@ -2,10 +2,10 @@
 FROM python:3.10-slim-bullseye
 
 # Install system dependencies
-# libswipl8 is required for SWI-Prolog
+# swi-prolog-nox is used for a smaller footprint on servers (no X11)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    swi-prolog \
-    libswipl-dev \
+    swi-prolog-nox \
+    swi-prolog-dev \
     build-essential \
     libpq-dev \
     curl \
