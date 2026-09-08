@@ -74,7 +74,7 @@ class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScree
               '${RouteNames.purchaseOrders}-details',
               pathParameters: {'id': order.id},
             ),
-            title: Text(order.orderNumber, style: AppTextStyles.subtitle),
+            title: Text(order.orderNumber ?? 'No Order #', style: AppTextStyles.subtitle),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

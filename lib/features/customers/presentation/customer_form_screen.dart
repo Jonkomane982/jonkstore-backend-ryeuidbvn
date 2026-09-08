@@ -50,7 +50,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
     result.fold(
       (customer) {
         if (customer != null) {
-          _nameController.text = customer.name;
+          _nameController.text = customer.firstName; // Use firstName
           _emailController.text = customer.email ?? '';
           _phoneController.text = customer.phone ?? '';
           _addressController.text = customer.address ?? '';
@@ -86,12 +86,12 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
 
     final customer = Customer(
       id: widget.customerId ?? const Uuid().v4(),
-      name: _nameController.text.trim(),
+      firstName: _nameController.text.trim(), // Corrected parameter name
       email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
       phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
       address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
       businessId: business.id,
-      createdAt: DateTime.now(), // Real logic keeps original
+      createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
       syncStatus: SyncStatus.pending,
     );

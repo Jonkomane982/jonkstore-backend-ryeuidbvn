@@ -3,43 +3,53 @@
 const { asyncHandler, generateOtp } = require('../utils/helpers');
 const { firebaseAdminService } = require('../services/firebase.service');
 const { emailService } = require('../services/email.service');
-const aiPipeline = require('../services/ai-data-pipeline.service');
 const authRepository = require('../repositories/auth.repository');
 const otpRepository = require('../repositories/otp.repository');
 const { AuthenticationError, ValidationError } = require('../utils/errors');
 const environment = require('../config/environment');
 
 /**
- * Controller for User Authentication and Identity Management.
+ * Controller for User Authentication.
+ * Hardened with generic error messages to prevent account enumeration.
  */
 class AuthController {
-  /**
-   * Verified Google Sign-In / Firebase ID Token.
-   */
   login = asyncHandler(async (req, res) => {
     const { idToken } = req.body;
 
     if (!idToken) {
-      throw new AuthenticationError('ID Token is required', 'MISSING_TOKEN');
+      throw new AuthenticationError('Authentication failed', 'MISSING_TOKEN');
     }
 
-    const decodedToken = await firebaseAdminService.verifyIdToken(idToken);
+    let decodedToken;
+    try {
+      decodedToken = await firebaseAdminService.verifyIdToken(idToken);
+    } catch (err) {
+      req.appLogger.error({ err }, 'Firebase token verification failed');
+      throw new AuthenticationError('Authentication failed', 'INVALID_TOKEN');
+    }
+
     const { uid, email, name } = decodedToken;
 
-    if (!email || !decodedToken.email_verified) {
-      throw new AuthenticationError('A verified email address is required', 'EMAIL_NOT_VERIFIED');
+    if (!email) {
+      throw new AuthenticationError('Authentication failed', 'EMAIL_REQUIRED');
     }
+
+    // SECURITY: Ensure only the authorized owner can log in/setup
+    const isAuthorizedOwner = environment.ownerEmail &&
+                             email.toLowerCase() === environment.ownerEmail.toLowerCase();
 
     let user = await authRepository.findUserByFirebaseUid(uid);
 
     if (!user) {
-      if (!environment.ownerEmail || email.toLowerCase() !== environment.ownerEmail) {
-        throw new AuthenticationError('This account is not authorized to create an owner profile', 'OWNER_ACCOUNT_REQUIRED');
+      if (!isAuthorizedOwner) {
+        req.appLogger.warn({ email }, 'Unauthorized login attempt blocked');
+        throw new AuthenticationError('Access denied', 'OWNER_ACCOUNT_REQUIRED');
       }
+
       user = await authRepository.createUser({
         firebase_uid: uid,
-        email: email,
-        username: name,
+        email: email.toLowerCase(),
+        username: name || email.split('@')[0],
         role_name: 'OWNER',
       });
     }
@@ -48,7 +58,7 @@ class AuthController {
 
     res.status(200).json({
       success: true,
-      message: 'Authentication successful',
+      message: 'Access granted',
       data: {
         user: {
           id: user.id,
@@ -60,98 +70,78 @@ class AuthController {
     });
   });
 
-  /**
-   * Request an OTP for Owner Verification.
-   */
   requestOwnerOtp = asyncHandler(async (req, res) => {
     const { email } = req.body;
-    if (!email || email.toLowerCase() !== environment.ownerEmail) {
-      throw new ValidationError('A valid owner email is required');
+
+    // Masking: Always return success even if email doesn't match OWNER_EMAIL
+    // to prevent email discovery, but only send if it matches.
+    if (email && environment.ownerEmail && email.toLowerCase() === environment.ownerEmail.toLowerCase()) {
+      const otpCode = generateOtp();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+      await otpRepository.invalidatePreviousOtps(email, 'OWNER_VERIFICATION');
+      await otpRepository.createOtp({
+        email: email.toLowerCase(),
+        otpCode,
+        purpose: 'OWNER_VERIFICATION',
+        expiresAt,
+      });
+
+      await emailService.sendOwnerOtp({
+        to: email.toLowerCase(),
+        otpCode,
+        expiresAt,
+      });
+
+      req.appLogger.info({ email }, 'Verification code dispatched to authorized owner');
     }
-
-    const otpCode = generateOtp();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
-
-    console.log(`\n[TEST] Verification code for ${email}: ${otpCode}\n`);
-
-    await otpRepository.invalidatePreviousOtps(email, 'OWNER_VERIFICATION');
-    await otpRepository.createOtp({
-      email,
-      otpCode,
-      purpose: 'OWNER_VERIFICATION',
-      expiresAt,
-    });
-
-    await emailService.sendOwnerOtp({
-      to: email,
-      otpCode,
-      expiresAt,
-    });
 
     res.status(200).json({
       success: true,
-      message: 'Verification code sent to email',
+      message: 'If authorized, a verification code has been sent to your email.',
     });
   });
 
-  /**
-   * Verify the OTP provided by the user.
-   */
   verifyOwnerOtp = asyncHandler(async (req, res) => {
     const { email, otpCode } = req.body;
-    if (!email || !otpCode) throw new ValidationError('Email and code are required');
+    if (!email || !otpCode) throw new ValidationError('Credentials required');
 
-    const otp = await otpRepository.findValidOtp(email, otpCode, 'OWNER_VERIFICATION');
+    const otp = await otpRepository.findValidOtp(email.toLowerCase(), otpCode, 'OWNER_VERIFICATION');
     if (!otp) {
-      throw new ValidationError('Invalid or expired verification code');
+      // Generic error
+      throw new AuthenticationError('Invalid verification code');
     }
 
     await otpRepository.markAsUsed(otp.id);
 
     res.status(200).json({
       success: true,
-      message: 'Email verified successfully',
+      message: 'Identity verified',
     });
   });
 
-  /**
-   * Final step: Setup the business for the authenticated user and mirror to JonkAI.
-   */
   setupBusiness = asyncHandler(async (req, res) => {
     const { businessName, industry, ownerFullName } = req.body;
 
     if (!req.user || !req.user.id) {
-      throw new AuthenticationError('Authentication required');
+      throw new AuthenticationError('Session expired');
     }
 
     if (!businessName || !ownerFullName) {
-      throw new ValidationError('Business name and owner full name are required');
+      throw new ValidationError('All fields are required');
     }
 
-    // 1. Transactional Operational Setup
     const business = await authRepository.setupNewBusiness(req.user.id, {
       name: businessName,
       industry,
       ownerFullName
     });
 
-    // 2. AI Analytical Mirroring (Non-blocking)
-    // Mirrors the business creation to JonkAI Core.
-    try {
-      await aiPipeline.processSyncEvent('businesses', 'CREATE', business);
-    } catch (err) {
-      req.appLogger.error({ err }, 'Failed to mirror business to AI during setup');
-    }
-
     res.status(201).json({
       success: true,
       message: 'Business setup successful',
       data: {
-        business: {
-          id: business.id,
-          name: business.name,
-          industry: business.industry
-        }
+        business: { id: business.id, name: business.name }
       }
     });
   });

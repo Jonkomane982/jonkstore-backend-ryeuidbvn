@@ -35,19 +35,26 @@ class _OwnerRegisterScreenState extends ConsumerState<OwnerRegisterScreen> {
 
   Future<void> _onRegister() async {
     if (!_formKey.currentState!.validate()) return;
+    
     final controller = ref.read(ownerAuthControllerProvider.notifier);
+    
     await controller.startRegistration(
       username: _usernameController.text.trim(),
       password: _passwordController.text.trim(),
     );
+    
     final stateAfter = ref.read(ownerAuthControllerProvider);
-    if (stateAfter.isRegistrationStarted) {
+    
+    // Proceed to OTP stage even if registration "silently" failed due to existing account
+    if (stateAfter.isRegistrationStarted || stateAfter.errorMessage == null) {
       await controller.requestOtp();
       final stateAfterOtp = ref.read(ownerAuthControllerProvider);
+      
       if (stateAfterOtp.isOtpSent && mounted) {
+        // SECURITY: Generic message that doesn't reveal the email address
         CustomSnackBar.showSuccess(
           context,
-          'A 6-digit verification code has been sent to your email. Enter it to continue.',
+          'If authorized, a 6-digit verification code has been sent to your email.',
         );
         context.goNamed(RouteNames.verifyEmail);
       }
@@ -59,7 +66,10 @@ class _OwnerRegisterScreenState extends ConsumerState<OwnerRegisterScreen> {
     final state = ref.watch(ownerAuthControllerProvider);
 
     ref.listen<OwnerAuthState>(ownerAuthControllerProvider, (prev, next) {
-      if (next.errorMessage != null && next.errorMessage!.isNotEmpty) {
+      // SECURITY: We only show non-auth errors here to avoid account enumeration
+      if (next.errorMessage != null && 
+          next.errorMessage!.isNotEmpty && 
+          !next.errorMessage!.contains('already-in-use')) {
         CustomSnackBar.showError(context, next.errorMessage!);
       }
     });
@@ -88,7 +98,7 @@ class _OwnerRegisterScreenState extends ConsumerState<OwnerRegisterScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'Create your owner identity. A verification code will be emailed to confirm access.',
+                    'Create your owner identity. A verification code will be sent to confirm access.',
                     style: AppTextStyles.bodyLarge,
                     textAlign: TextAlign.center,
                   ),

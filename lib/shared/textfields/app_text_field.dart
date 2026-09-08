@@ -13,6 +13,7 @@ class AppTextField extends StatelessWidget {
   final Widget? prefixIcon;
   final Widget? suffixIcon;
   final Widget? prefix;
+  final String? prefixText;
   final String? Function(String?)? validator;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onFieldSubmitted;
@@ -34,6 +35,7 @@ class AppTextField extends StatelessWidget {
     this.prefixIcon,
     this.suffixIcon,
     this.prefix,
+    this.prefixText,
     this.validator,
     this.onChanged,
     this.onFieldSubmitted,
@@ -84,6 +86,7 @@ class AppTextField extends StatelessWidget {
             prefixIcon: prefixIcon,
             suffixIcon: suffixIcon,
             prefix: prefix,
+            prefixText: prefixText,
             counterText: "", // Hide default counter for a cleaner look
           ),
         ),

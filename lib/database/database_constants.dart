@@ -78,6 +78,7 @@ class DatabaseConstants {
   static const String columnIsVerified = 'is_verified';
   static const String columnEmail = 'email';
   static const String columnPhone = 'phone';
+  static const String columnPasswordHash = 'password_hash';
 
   // --- Entity Specific Columns ---
   static const String columnBusinessId = 'business_id';
@@ -98,10 +99,14 @@ class DatabaseConstants {
   static const String columnSku = 'sku';
   static const String columnBarcode = 'barcode';
   static const String columnPrice = 'price';
+  static const String columnCostPrice = 'cost_price';
   static const String columnQuantity = 'quantity';
   static const String columnTotalAmount = 'total_amount';
   static const String columnPaidAmount = 'paid_amount';
   static const String columnOrderNumber = 'order_number';
   static const String columnPurchaseDate = 'purchase_date';
   static const String columnStatus = 'status';
+  
+  static const String columnTransactionDate = 'transaction_date';
+  static const String columnLowStockThreshold = 'low_stock_threshold';
 }

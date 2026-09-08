@@ -1,8 +1,7 @@
-# Use the newer Bookworm base for better package reliability
+# Use the latest stable Python image based on Debian Bookworm
 FROM python:3.10-slim-bookworm
 
-# Install system dependencies
-# Bookworm has swi-prolog readily available in its stable repo
+# Install system dependencies for SWI-Prolog and PostgreSQL
 RUN apt-get update && apt-get install -y --no-install-recommends \
     swi-prolog \
     build-essential \
@@ -14,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
-# Create a non-root user for security
+# Create a non-root user for production security
 RUN useradd -m jonkai && chown -R jonkai:jonkai /app
 USER jonkai
 
@@ -22,12 +21,12 @@ USER jonkai
 COPY --chown=jonkai:jonkai requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Copy application code
+# Copy the rest of the application code
 COPY --chown=jonkai:jonkai . .
 
-# Environment configuration
+# Ensure the local bin is in the PATH
 ENV PATH="/home/jonkai/.local/bin:${PATH}"
 ENV PYTHONUNBUFFERED=1
 
-# Start application
+# Run the FastAPI application
 CMD ["sh", "-c", "python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"]

@@ -132,7 +132,7 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
                           controller: _runnerFeeController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           prefixText: 'KES ',
-                          hint: '0.00',
+                          hintText: '0.00',
                         ),
                       ),
                       const SizedBox(width: AppSpacing.md),

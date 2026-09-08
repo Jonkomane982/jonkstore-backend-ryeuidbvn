@@ -7,10 +7,13 @@ class Environment {
     'APP_ENV',
     defaultValue: 'dev',
   );
-  static AppEnvironment _environment = AppEnvironment.dev;
+  
+  static AppEnvironment _environment = _environmentFromBuildConfig();
 
   static void init([AppEnvironment? env]) {
-    _environment = env ?? _environmentFromBuildConfig();
+    if (env != null) {
+      _environment = env;
+    }
   }
 
   static AppEnvironment _environmentFromBuildConfig() {
@@ -28,21 +31,22 @@ class Environment {
   static AppEnvironment get current => _environment;
 
   static String get baseUrl {
+    // If a URL was provided via dart-define, use it.
     if (_apiBaseUrl.isNotEmpty) {
       return _apiBaseUrl.endsWith('/')
           ? _apiBaseUrl.substring(0, _apiBaseUrl.length - 1)
           : _apiBaseUrl;
     }
+
+    // Fallbacks based on environment
     switch (_environment) {
-      case AppEnvironment.dev:
-        return 'http://localhost:5000/api';
-      case AppEnvironment.test:
-        return 'http://localhost:5000/api';
       case AppEnvironment.prod:
-        throw StateError(
-          'API_BASE_URL must be supplied for a production build. '
-          'Example: --dart-define=API_BASE_URL=https://your-api.onrender.com/api',
-        );
+        // Default production URL if none provided via dart-define
+        return 'https://jonkstore-api-vwsh.onrender.com/api';
+      case AppEnvironment.test:
+      case AppEnvironment.dev:
+      default:
+        return 'http://localhost:5000/api';
     }
   }
 

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:jonkstore/core/providers/core_providers.dart';
@@ -20,7 +21,7 @@ final ownerRepositoryProvider = Provider<OwnerRepository>((ref) {
 
 /// Provider for the [OtpService] used by [OwnerService] for OTP lifecycle.
 final otpServiceForOwnerProvider = Provider<OtpService>((ref) {
-  return OtpService();
+  return OtpService(FirebaseFirestore.instance);
 });
 
 /// Provider for the [OwnerService].

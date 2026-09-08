@@ -5,7 +5,8 @@ import '../errors/exceptions.dart';
 
 /// Centralized API Client using Dio.
 /// 
-/// Handles base configuration, interceptors, and error mapping.
+/// Handles base configuration, interceptors, and error mapping tailored 
+/// for the JonkStore Node.js backend.
 class ApiClient {
   late final Dio _dio;
 
@@ -25,7 +26,6 @@ class ApiClient {
 
   Dio get dio => _dio;
 
-  /// Performs a GET request.
   Future<Response> get(
     String path, {
     Map<String, dynamic>? queryParameters,
@@ -44,7 +44,6 @@ class ApiClient {
     }
   }
 
-  /// Performs a POST request.
   Future<Response> post(
     String path, {
     dynamic data,
@@ -65,7 +64,6 @@ class ApiClient {
     }
   }
 
-  /// Performs a PUT request.
   Future<Response> put(
     String path, {
     dynamic data,
@@ -86,7 +84,6 @@ class ApiClient {
     }
   }
 
-  /// Performs a DELETE request.
   Future<Response> delete(
     String path, {
     dynamic data,
@@ -108,20 +105,59 @@ class ApiClient {
   }
 
   Exception _handleDioError(DioException e) {
-    switch (e.type) {
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.sendTimeout:
-      case DioExceptionType.receiveTimeout:
-      case DioExceptionType.connectionError:
-        return NetworkException('Connection timed out');
-      case DioExceptionType.badResponse:
-        final statusCode = e.response?.statusCode;
-        final message = e.response?.data?['message'] ?? 'Server error';
-        return ServerException(message, statusCode?.toString());
-      case DioExceptionType.cancel:
-        return AppException('Request cancelled');
-      default:
-        return AppException('Something went wrong');
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.connectionError) {
+      return NetworkException('Please check your internet connection');
     }
+
+    if (e.type == DioExceptionType.badResponse) {
+      final statusCode = e.response?.statusCode;
+      final data = e.response?.data;
+      
+      // The Node.js backend returns errors in the format: { error: { message: "...", code: "..." } }
+      String message = 'An unexpected error occurred';
+      if (data is Map) {
+        if (data['error'] != null && data['error']['message'] != null) {
+          message = data['error']['message'];
+        } else if (data['message'] != null) {
+          message = data['message'];
+        }
+      }
+
+      if (statusCode == 401) return AuthenticationException(message);
+      if (statusCode == 403) return AuthorizationException(message);
+      if (statusCode == 404) return NotFoundException(message);
+      
+      return ServerException(message, statusCode?.toString());
+    }
+
+    if (e.type == DioExceptionType.cancel) {
+      return AppException('Request cancelled');
+    }
+
+    return AppException('Something went wrong. Please try again.');
   }
+}
+
+class AuthenticationException implements Exception {
+  final String message;
+  AuthenticationException(this.message);
+  @override
+  String toString() => message;
+}
+
+class AuthorizationException implements Exception {
+  final String message;
+  AuthorizationException(this.message);
+  @override
+  String toString() => message;
+}
+
+class NotFoundException implements Exception {
+  final String message;
+  NotFoundException(this.message);
+  @override
+  String toString() => message;
 }
