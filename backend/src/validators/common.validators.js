@@ -35,6 +35,10 @@ const authRegisterSchema = z.object({
   lastName: z.string().trim().min(1).max(64).optional(),
 });
 
+const ownerForgotPasswordSchema = z.object({
+  email: emailSchema,
+}).strict();
+
 module.exports = {
   healthQuerySchema,
   paginationQuerySchema,
@@ -43,4 +47,5 @@ module.exports = {
   passwordSchema,
   authLoginSchema,
   authRegisterSchema,
+  ownerForgotPasswordSchema,
 };

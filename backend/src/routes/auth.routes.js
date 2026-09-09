@@ -4,6 +4,8 @@ const express = require('express');
 const authController = require('../controllers/auth.controller');
 const { requireAuthentication } = require('../middleware/auth.middleware');
 const { firebaseAdminService } = require('../services/firebase.service');
+const { validate } = require('../middleware/validation.middleware');
+const { ownerForgotPasswordSchema } = require('../validators/common.validators');
 
 /**
  * Routes for Authentication and Identity.
@@ -14,6 +16,13 @@ function buildAuthRouter() {
 
   // Primary Login Endpoint (Handles Google ID Tokens)
   router.post('/login', authController.login);
+
+  // Owner Forgot Password — unauthenticated endpoint, sends password reset link via SMTP
+  router.post(
+    '/owner/forgot-password',
+    validate(ownerForgotPasswordSchema),
+    authController.requestOwnerPasswordReset
+  );
 
   // Protected Identity Routes
   router.get('/me', auth, authController.me);

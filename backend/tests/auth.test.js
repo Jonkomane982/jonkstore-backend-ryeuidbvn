@@ -9,7 +9,8 @@ const {
   optionalAuthentication,
 } = require('../src/middleware/auth.middleware');
 const { errorHandlerMiddleware } = require('../src/middleware/error.middleware');
-const { MockFirebaseService, makeNullLogger } = require('./test-helpers');
+const { MockFirebaseService, MockEmailService, makeNullLogger, buildTestApp } = require('./test-helpers');
+const { ServiceUnavailableError, AppError } = require('../src/utils/errors');
 const { z } = require('zod');
 
 function buildAuthApp(firebase, options = {}) {
@@ -219,5 +220,104 @@ describe('Authentication Middleware Behavior', () => {
       .set('Authorization', 'Bearer t');
     expect(res.status).toBe(200);
     expect(res.body.perm).toBe('ok');
+  });
+});
+
+describe('Owner Forgot Password Endpoint (/api/auth/owner/forgot-password)', () => {
+  const OWNER_EMAIL = 'owner@test.local';
+
+  afterEach(() => {
+    jest.resetModules();
+  });
+
+  it('returns 200 generic message AND dispatches email when owner email matches', async () => {
+    const { app, services } = buildTestApp();
+    const res = await request(app)
+      .post('/api/auth/owner/forgot-password')
+      .send({ email: OWNER_EMAIL });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toMatch(/authorized/);
+    expect(res.body.message).toMatch(/password reset link/);
+
+    const linkCalls = services.firebase.calls.filter(
+      (c) => c.method === 'generatePasswordResetLink'
+    );
+    expect(linkCalls).toHaveLength(1);
+    expect(linkCalls[0].email).toBe(OWNER_EMAIL);
+
+    const resetEmails = services.email.sent.filter((e) => e._tag === 'password-reset');
+    expect(resetEmails).toHaveLength(1);
+    expect(resetEmails[0].to).toBe(OWNER_EMAIL);
+    expect(resetEmails[0].link).toContain('mock-oob-code');
+  });
+
+  it('returns 200 generic message but does NOT dispatch email when email is not the owner (masking)', async () => {
+    const { app, services } = buildTestApp();
+    const res = await request(app)
+      .post('/api/auth/owner/forgot-password')
+      .send({ email: 'attacker@evil.local' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toMatch(/authorized/);
+
+    const linkCalls = services.firebase.calls.filter(
+      (c) => c.method === 'generatePasswordResetLink'
+    );
+    expect(linkCalls).toHaveLength(0);
+
+    const resetEmails = services.email.sent.filter((e) => e._tag === 'password-reset');
+    expect(resetEmails).toHaveLength(0);
+  });
+
+  it('rejects invalid body (missing email) with 400 ValidationError', async () => {
+    const { app } = buildTestApp();
+    const res = await request(app)
+      .post('/api/auth/owner/forgot-password')
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.message).toMatch(/Invalid request body/);
+  });
+
+  it('returns 503 ServiceUnavailable when Firebase Admin cannot generate link (infrastructure error, not masked)', async () => {
+    const firebase = new MockFirebaseService({
+      passwordResetLinkError: new ServiceUnavailableError(
+        'Firebase Auth service unavailable',
+        'FIREBASE_UNAVAILABLE'
+      ),
+    });
+    const { app, services } = buildTestApp({ firebase });
+    const res = await request(app)
+      .post('/api/auth/owner/forgot-password')
+      .send({ email: OWNER_EMAIL });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('FIREBASE_UNAVAILABLE');
+
+    const resetEmails = services.email.sent.filter((e) => e._tag === 'password-reset');
+    expect(resetEmails).toHaveLength(0);
+  });
+
+  it('returns 5xx when SMTP send fails after Firebase link generated (infrastructure error, not masked)', async () => {
+    const email = new MockEmailService({
+      passwordResetError: new AppError('Failed to send email', 502, 'EMAIL_SEND_FAILED'),
+    });
+    const { app, services } = buildTestApp({ email });
+    const res = await request(app)
+      .post('/api/auth/owner/forgot-password')
+      .send({ email: OWNER_EMAIL });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error.code).toBe('EMAIL_SEND_FAILED');
+
+    const linkCalls = services.firebase.calls.filter(
+      (c) => c.method === 'generatePasswordResetLink'
+    );
+    expect(linkCalls).toHaveLength(1);
+    expect(linkCalls[0].email).toBe(OWNER_EMAIL);
   });
 });

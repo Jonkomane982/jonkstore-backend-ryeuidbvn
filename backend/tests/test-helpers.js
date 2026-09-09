@@ -24,6 +24,8 @@ class MockFirebaseService {
     this.initialized = options.initialized ?? true;
     this.tokenResult = options.tokenResult || null;
     this.tokenError = options.tokenError || null;
+    this.passwordResetLinkResult = options.passwordResetLinkResult || 'https://mock-firebase.local/reset?oob=mock-oob-code';
+    this.passwordResetLinkError = options.passwordResetLinkError || null;
     this.calls = [];
   }
   isConfigured() { return this.configured; }
@@ -35,12 +37,18 @@ class MockFirebaseService {
     if (this.tokenResult) return this.tokenResult;
     throw { code: 'auth/invalid-id-token', message: 'invalid' };
   }
+  async generatePasswordResetLink(email) {
+    this.calls.push({ method: 'generatePasswordResetLink', email });
+    if (this.passwordResetLinkError) throw this.passwordResetLinkError;
+    return this.passwordResetLinkResult;
+  }
 }
 
 class MockEmailService {
   constructor(options = {}) {
     this.configured = options.configured ?? false;
     this.initialized = options.initialized ?? true;
+    this.passwordResetError = options.passwordResetError || null;
     this.sent = [];
   }
   isConfigured() { return this.configured; }
@@ -50,6 +58,17 @@ class MockEmailService {
   async sendEmail(options) {
     this.sent.push(options);
     return { messageId: `mock-${Date.now()}`, accepted: options.to, rejected: [], captured: true };
+  }
+  async sendPasswordResetEmail({ to, link }) {
+    if (this.passwordResetError) throw this.passwordResetError;
+    const result = await this.sendEmail({
+      to,
+      subject: 'JonkStore POS — Password Recovery',
+      text: `Reset link: ${link}`,
+      html: `<a href="${link}">Reset</a>`,
+    });
+    this.sent.push({ _tag: 'password-reset', to, link });
+    return result;
   }
   getCapturedEmails() { return [...this.sent]; }
   shutdown() { return null; }

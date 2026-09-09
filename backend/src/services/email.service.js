@@ -208,6 +208,31 @@ class EmailService {
     });
   }
 
+  async sendPasswordResetEmail({ to, link }) {
+    const subject = 'JonkStore POS — Password Recovery';
+    const text = `Follow this link to reset your password: ${link}\n\nThis link will expire shortly.\n\n— The JonkStore Team`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #374151;">
+        <h2>Password Recovery</h2>
+        <p>We received a request to reset your password for JonkStore POS.</p>
+        <div style="margin: 32px 0;">
+          <a href="${link}" style="background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+            Reset Password
+          </a>
+        </div>
+        <p>If the button above doesn't work, copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; font-size: 12px; color: #6b7280;">${link}</p>
+        <p style="margin-top: 32px; font-size: 13px; color: #9ca3af;">If you did not request this, you can safely ignore this email.</p>
+      </div>
+    `;
+    return this.sendEmail({
+      to,
+      subject,
+      text,
+      html,
+    });
+  }
+
   getCapturedEmails() {
     return [...this._sent];
   }

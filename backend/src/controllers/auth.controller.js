@@ -120,6 +120,28 @@ class AuthController {
     });
   });
 
+  requestOwnerPasswordReset = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    const firebase = req.services && req.services.firebase ? req.services.firebase : firebaseAdminService;
+    const emailSvc = req.services && req.services.email ? req.services.email : emailService;
+
+    if (
+      email &&
+      environment.ownerEmail &&
+      email.toLowerCase() === environment.ownerEmail.toLowerCase()
+    ) {
+      const normalizedEmail = email.toLowerCase();
+      const link = await firebase.generatePasswordResetLink(normalizedEmail);
+      await emailSvc.sendPasswordResetEmail({ to: normalizedEmail, link });
+      req.appLogger.info({ email: normalizedEmail }, 'Password reset link dispatched to authorized owner');
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'If authorized, a password reset link has been sent to your email.',
+    });
+  });
+
   setupBusiness = asyncHandler(async (req, res) => {
     const { businessName, industry, ownerFullName } = req.body;
 

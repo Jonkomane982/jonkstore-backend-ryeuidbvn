@@ -43,7 +43,7 @@ class OwnerService {
   }) async {
     try {
       final passwordHash = _passwordService.hashPassword(password);
-      
+
       try {
         final cred = await _signInOrCreateWithRetries(
           create: true,
@@ -62,15 +62,23 @@ class OwnerService {
             );
             _capturePendingReg(username, passwordHash, cred.user!.uid);
           } catch (_) {
-            return Result.failure(const AuthFailure('Authentication failed. Please check your credentials.'));
+            return Result.failure(
+              const AuthFailure(
+                'Authentication failed. Please check your credentials.',
+              ),
+            );
           }
         } else {
-          return Result.failure(const AuthFailure('Registration failed. Please try again.'));
+          return Result.failure(
+            const AuthFailure('Registration failed. Please try again.'),
+          );
         }
       }
       return Result.success(null);
     } catch (e) {
-      return Result.failure(const AuthFailure('A technical error occurred. Please try again.'));
+      return Result.failure(
+        const AuthFailure('A technical error occurred. Please try again.'),
+      );
     }
   }
 
@@ -88,9 +96,10 @@ class OwnerService {
   Future<Result<String>> requestOtpCode() async {
     try {
       // Relative path 'auth/...' to respect the '/api' prefix in Environment.baseUrl
-      await _apiClient.post('auth/owner/request-otp', data: {
-        'email': AppOwner.ownerEmail,
-      });
+      await _apiClient.post(
+        'auth/owner/request-otp',
+        data: {'email': AppOwner.ownerEmail},
+      );
       return Result.success('sent');
     } catch (e) {
       return Result.failure(AuthFailure(e.toString()));
@@ -100,13 +109,15 @@ class OwnerService {
   /// REST ROUTE: Verify OTP against Backend
   Future<Result<void>> verifyOtp(String code) async {
     try {
-      await _apiClient.post('auth/owner/verify-otp', data: {
-        'email': AppOwner.ownerEmail,
-        'otpCode': code.trim(),
-      });
+      await _apiClient.post(
+        'auth/owner/verify-otp',
+        data: {'email': AppOwner.ownerEmail, 'otpCode': code.trim()},
+      );
       return Result.success(null);
     } catch (e) {
-      return Result.failure(const AuthFailure('Invalid or expired verification code.'));
+      return Result.failure(
+        const AuthFailure('Invalid or expired verification code.'),
+      );
     }
   }
 
@@ -114,26 +125,36 @@ class OwnerService {
     try {
       final GoogleSignIn googleSignIn = GoogleSignIn();
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser == null) return Result.failure(const AuthFailure('Sign-in cancelled.'));
+      if (googleUser == null)
+        return Result.failure(const AuthFailure('Sign-in cancelled.'));
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
       final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      final UserCredential userCredential = await _firebaseAuth!.signInWithCredential(credential);
+      final UserCredential userCredential = await _firebaseAuth!
+          .signInWithCredential(credential);
       final idToken = await userCredential.user!.getIdToken();
 
       // Sync with Backend
-      final response = await _apiClient.post('auth/login', data: {'idToken': idToken});
-      
+      final response = await _apiClient.post(
+        'auth/login',
+        data: {'idToken': idToken},
+      );
+
       final profile = OwnerProfile.fromJson(response.data['data']['user']);
       await _ownerRepository.saveProfile(profile);
 
       return Result.success(profile);
     } catch (e) {
-      return Result.failure(const AuthFailure('Access denied. Ensure you are using the authorized owner account.'));
+      return Result.failure(
+        const AuthFailure(
+          'Access denied. Ensure you are using the authorized owner account.',
+        ),
+      );
     }
   }
 
@@ -147,13 +168,16 @@ class OwnerService {
         email: AppOwner.ownerEmail,
         password: password,
       );
-      
+
       final idToken = await cred.user!.getIdToken();
-      final response = await _apiClient.post('auth/login', data: {'idToken': idToken});
-      
+      final response = await _apiClient.post(
+        'auth/login',
+        data: {'idToken': idToken},
+      );
+
       final profile = OwnerProfile.fromJson(response.data['data']['user']);
       await _ownerRepository.saveProfile(profile);
-      
+
       return Result.success(profile);
     } catch (e) {
       return Result.failure(const AuthFailure('Invalid username or password.'));
@@ -180,10 +204,14 @@ class OwnerService {
 
   Future<Result<void>> sendPasswordResetEmail({String? email}) async {
     try {
-      await _firebaseAuth?.sendPasswordResetEmail(email: AppOwner.ownerEmail);
+      final targetEmail = (email ?? AppOwner.ownerEmail).trim().toLowerCase();
+      await _apiClient.post(
+        '/auth/owner/forgot-password',
+        data: {'email': targetEmail},
+      );
       return Result.success(null);
     } catch (e) {
-      return Result.failure(const AuthFailure('Action failed.'));
+      return Result.failure(const AuthFailure('Authentication failed.'));
     }
   }
 
@@ -193,7 +221,8 @@ class OwnerService {
   }) async {
     try {
       final user = _firebaseAuth?.currentUser;
-      if (user == null) return Result.failure(const AuthFailure('Session expired.'));
+      if (user == null)
+        return Result.failure(const AuthFailure('Session expired.'));
       await user.updatePassword(newPassword);
       return Result.success(null);
     } catch (e) {
@@ -207,7 +236,8 @@ class OwnerService {
   }) async {
     try {
       final reg = _pendingReg;
-      if (reg == null) return Result.failure(const AuthFailure('Session expired.'));
+      if (reg == null)
+        return Result.failure(const AuthFailure('Session expired.'));
 
       final profile = OwnerProfile(
         id: const Uuid().v4(),
@@ -240,20 +270,30 @@ class OwnerService {
     for (int attempt = 0; attempt < _kAuthMaxRetries; attempt++) {
       try {
         if (create) {
-          return await _firebaseAuth!.createUserWithEmailAndPassword(email: email, password: password);
+          return await _firebaseAuth!.createUserWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
         } else {
-          return await _firebaseAuth!.signInWithEmailAndPassword(email: email, password: password);
+          return await _firebaseAuth!.signInWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
         }
       } catch (e) {
         lastError = e;
         if (e is FirebaseAuthException) {
-          if (e.code == 'email-already-in-use' || e.code == 'wrong-password' || e.code == 'user-not-found') {
+          if (e.code == 'email-already-in-use' ||
+              e.code == 'wrong-password' ||
+              e.code == 'user-not-found') {
             throw e;
           }
         }
       }
       if (attempt < _kAuthMaxRetries - 1) {
-        await Future<void>.delayed(Duration(milliseconds: 500 * (1 << attempt)));
+        await Future<void>.delayed(
+          Duration(milliseconds: 500 * (1 << attempt)),
+        );
       }
     }
     throw lastError!;
@@ -266,5 +306,10 @@ class _PendingRegistration {
   final String firebaseUid;
   final String email;
   final DateTime createdAt;
-  _PendingRegistration({required this.username, required this.passwordHash, required this.firebaseUid, required this.email}) : createdAt = DateTime.now();
+  _PendingRegistration({
+    required this.username,
+    required this.passwordHash,
+    required this.firebaseUid,
+    required this.email,
+  }) : createdAt = DateTime.now();
 }
