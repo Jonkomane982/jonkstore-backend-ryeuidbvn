@@ -13,99 +13,106 @@ import 'package:jonkstore/core/network/result.dart';
 import 'package:jonkstore/core/errors/failures.dart';
 import 'package:jonkstore/firebase_options.dart';
 import 'package:jonkstore/core/services/password_service.dart';
-import 'package:jonkstore/core/services/otp_service.dart';
 import 'package:jonkstore/core/network/api_client.dart';
 
-/// Owner authentication orchestrator with enhanced security masking.
+/// Owner authentication orchestrator.
+/// Bypasses Firestore for OTPs by using the Node.js Backend as the source of truth.
 class OwnerService {
   final FirebaseAuth? _firebaseAuth;
   final OwnerRepository _ownerRepository;
   final PasswordService _passwordService;
-  final OtpService _otpService;
   final ApiClient _apiClient;
 
   _PendingRegistration? _pendingReg;
-  String? _lastOtpSessionId;
   String? _lastRegistrationUsername;
 
   OwnerService(
     this._firebaseAuth,
     this._ownerRepository,
-    this._otpService,
     this._apiClient, {
     PasswordService? passwordService,
   }) : _passwordService = passwordService ?? PasswordService();
 
   bool get _firebaseInitialized => Firebase.apps.isNotEmpty;
 
-  /// Handles first-time owner setup or re-linking an existing account.
+  /// Handles first-time setup or verifies password for existing account.
   Future<Result<void>> startOwnerRegistration({
     required String username,
     required String password,
   }) async {
     try {
       final passwordHash = _passwordService.hashPassword(password);
-      String firebaseUid;
-
+      
       try {
         final cred = await _signInOrCreateWithRetries(
           create: true,
           email: AppOwner.ownerEmail,
           password: password,
         );
-        firebaseUid = cred.user!.uid;
+        _capturePendingReg(username, passwordHash, cred.user!.uid);
       } on FirebaseAuthException catch (e) {
         if (e.code == 'email-already-in-use') {
-          // Masking: If account exists, verify the password by signing in.
-          // Then proceed to OTP stage for 2FA verification.
+          // SECURITY MASKING: Sign in to verify password, then move to OTP
           try {
             final cred = await _signInOrCreateWithRetries(
               create: false,
               email: AppOwner.ownerEmail,
               password: password,
             );
-            firebaseUid = cred.user!.uid;
+            _capturePendingReg(username, passwordHash, cred.user!.uid);
           } catch (_) {
-            // Mask password error: Keep attacker guessing if it's the wrong password or wrong account.
-            return Result.failure(const AuthFailure('Authentication failed. Please check your credentials.'));
+            return Result.failure(const AuthFailure('Authentication failed. Check your credentials.'));
           }
         } else {
-          return Result.failure(const AuthFailure('Registration failed. Please try again.'));
+          return Result.failure(const AuthFailure('Registration error. Please try again.'));
         }
       }
-
-      _pendingReg = _PendingRegistration(
-        username: username.trim(),
-        passwordHash: passwordHash,
-        firebaseUid: firebaseUid,
-        email: AppOwner.ownerEmail,
-      );
-      _lastRegistrationUsername = username.trim();
-
       return Result.success(null);
     } catch (e) {
-      return Result.failure(const AuthFailure('A technical error occurred. Please try again.'));
+      return Result.failure(const AuthFailure('System error. Please try again later.'));
     }
   }
 
-  Future<Result<String>> requestOtpCode() async {
-    final who = _pendingReg?.username ?? _lastRegistrationUsername ?? 'Owner';
-    final r = await _otpService.requestOtp(username: who);
-    r.fold((sid) => _lastOtpSessionId = sid, (_) {});
-    return r;
+  void _capturePendingReg(String username, String hash, String uid) {
+    _pendingReg = _PendingRegistration(
+      username: username.trim(),
+      passwordHash: hash,
+      firebaseUid: uid,
+      email: AppOwner.ownerEmail,
+    );
+    _lastRegistrationUsername = username.trim();
   }
 
+  /// Trigger Backend to send verification code via SMTP
+  Future<Result<String>> requestOtpCode() async {
+    try {
+      await _apiClient.post('/auth/owner/request-otp', data: {
+        'email': AppOwner.ownerEmail,
+      });
+      return Result.success('sent');
+    } catch (e) {
+      return Result.failure(AuthFailure(e.toString()));
+    }
+  }
+
+  /// Verify code against Backend database
   Future<Result<void>> verifyOtp(String code) async {
-    final sid = _lastOtpSessionId;
-    if (sid == null) return Result.failure(const AuthFailure('No active verification session.'));
-    return await _otpService.verifyOtp(sid, code);
+    try {
+      await _apiClient.post('/auth/owner/verify-otp', data: {
+        'email': AppOwner.ownerEmail,
+        'otpCode': code.trim(),
+      });
+      return Result.success(null);
+    } catch (e) {
+      return Result.failure(const AuthFailure('Invalid verification code.'));
+    }
   }
 
   Future<Result<OwnerProfile>> signInWithGoogle() async {
     try {
       final GoogleSignIn googleSignIn = GoogleSignIn();
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser == null) return Result.failure(const AuthFailure('Sign-in cancelled.'));
+      if (googleUser == null) return Result.failure(const AuthFailure('Cancelled.'));
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final AuthCredential credential = GoogleAuthProvider.credential(
@@ -116,7 +123,6 @@ class OwnerService {
       final UserCredential userCredential = await _firebaseAuth!.signInWithCredential(credential);
       final idToken = await userCredential.user!.getIdToken();
 
-      // Synchronize with Render Backend
       final response = await _apiClient.post('/auth/login', data: {'idToken': idToken});
       
       final profile = OwnerProfile.fromJson(response.data['data']['user']);
@@ -124,8 +130,7 @@ class OwnerService {
 
       return Result.success(profile);
     } catch (e) {
-      // SECURITY: Mask 401/403/500 into a generic message
-      return Result.failure(const AuthFailure('Access denied. Ensure you are using the authorized owner account.'));
+      return Result.failure(const AuthFailure('Access denied. Check the authorized owner account.'));
     }
   }
 
@@ -148,33 +153,109 @@ class OwnerService {
       
       return Result.success(profile);
     } catch (e) {
-      // SECURITY: Generic masking for all login failures
+      // SECURITY MASKING
       return Result.failure(const AuthFailure('Invalid username or password.'));
     }
   }
 
-  Future<Result<void>> resendOtpCode() async {
-    final sid = _lastOtpSessionId;
-    if (sid == null) return requestOtpCode();
-    final r = await _otpService.resendOtp(sid);
-    r.fold((newSid) => _lastOtpSessionId = newSid, (_) {});
-    return r;
+  Future<Result<void>> resendOtpCode() async => requestOtpCode();
+
+  Future<Result<bool>> checkVerificationStatus() async {
+    final user = _firebaseAuth?.currentUser;
+    if (user == null) return Result.success(false);
+    await user.reload();
+    return Result.success(_firebaseAuth!.currentUser?.emailVerified ?? false);
   }
+
+  Future<Result<void>> resendVerificationEmail() async {
+    try {
+      await _firebaseAuth?.currentUser?.sendEmailVerification();
+      return Result.success(null);
+    } catch (e) {
+      return Result.failure(const AuthFailure('Request failed.'));
+    }
+  }
+
+  Future<Result<void>> sendPasswordResetEmail({String? email}) async {
+    try {
+      await _firebaseAuth?.sendPasswordResetEmail(email: AppOwner.ownerEmail);
+      return Result.success(null);
+    } catch (e) {
+      return Result.failure(const AuthFailure('Request failed.'));
+    }
+  }
+
+  Future<Result<void>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final user = _firebaseAuth?.currentUser;
+      if (user == null) return Result.failure(const AuthFailure('No active session.'));
+      await user.updatePassword(newPassword);
+      return Result.success(null);
+    } catch (e) {
+      return Result.failure(const AuthFailure('Update failed.'));
+    }
+  }
+
+  Future<Result<OwnerProfile>> completeOnboardingWithBusiness({
+    required String businessId,
+    Transaction? txn,
+  }) async {
+    try {
+      final reg = _pendingReg;
+      if (reg == null) return Result.failure(const AuthFailure('Registration expired.'));
+
+      final profile = OwnerProfile(
+        id: const Uuid().v4(),
+        businessId: businessId,
+        firebaseUid: reg.firebaseUid,
+        username: reg.username,
+        role: UserRole.owner,
+        isVerified: true,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        syncStatus: SyncStatus.synced,
+        passwordHash: reg.passwordHash,
+      );
+
+      await _ownerRepository.saveProfile(profile, txn: txn);
+      return Result.success(profile);
+    } catch (e) {
+      return Result.failure(DatabaseFailure(e.toString()));
+    }
+  }
+
+  static const int _kAuthMaxRetries = 3;
 
   Future<UserCredential> _signInOrCreateWithRetries({
     required bool create,
     required String email,
     required String password,
   }) async {
-    // Retry logic... (keeping existing implementation)
-    if (create) {
-      return await _firebaseAuth!.createUserWithEmailAndPassword(email: email, password: password);
-    } else {
-      return await _firebaseAuth!.signInWithEmailAndPassword(email: email, password: password);
+    Object? lastError;
+    for (int attempt = 0; attempt < _kAuthMaxRetries; attempt++) {
+      try {
+        if (create) {
+          return await _firebaseAuth!.createUserWithEmailAndPassword(email: email, password: password);
+        } else {
+          return await _firebaseAuth!.signInWithEmailAndPassword(email: email, password: password);
+        }
+      } catch (e) {
+        lastError = e;
+        if (e is FirebaseAuthException) {
+          if (e.code == 'email-already-in-use' || e.code == 'wrong-password' || e.code == 'user-not-found') {
+            throw e;
+          }
+        }
+      }
+      if (attempt < _kAuthMaxRetries - 1) {
+        await Future<void>.delayed(Duration(milliseconds: 500 * (1 << attempt)));
+      }
     }
+    throw lastError!;
   }
-  
-  // (Rest of the checkVerificationStatus, sendPasswordResetEmail, etc. follow same pattern)
 }
 
 class _PendingRegistration {

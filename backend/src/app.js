@@ -93,15 +93,15 @@ function createApp(dependencies = {}) {
     next();
   });
 
-  // Global Tenant Resolution (resolves business_id if token is present)
+  // Global Tenant Resolution
   app.use(optionalAuthentication(services.firebase));
   app.use(resolveTenantContext);
 
   app.get('/', (_req, res) => {
     res.json({
-      service: 'jonkstore-backend',
+      service: 'JonkStore API',
       version: process.env.npm_package_version || '1.0.0',
-      status: 'running',
+      status: 'healthy',
       timestamp: new Date().toISOString(),
     });
   });
@@ -118,7 +118,6 @@ function createApp(dependencies = {}) {
       isConfigured: Boolean(services.storage),
     },
     database: {
-      // Tests intentionally use no external PostgreSQL dependency.
       isConfigured: environment.isTest ? false : databaseConfig.store.isConfigured,
       host: databaseConfig.store.host || '(unset)',
       name: databaseConfig.store.name || '(unset)',
@@ -130,16 +129,6 @@ function createApp(dependencies = {}) {
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);
-
-  app.locals.services = services;
-  app.locals.dependencies = {
-    firebaseConfig,
-    smtpConfig,
-    storageConfig,
-    databaseConfig,
-    environment,
-    serverConfig,
-  };
 
   return app;
 }

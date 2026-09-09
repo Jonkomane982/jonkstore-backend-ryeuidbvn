@@ -45,16 +45,17 @@ class _OwnerRegisterScreenState extends ConsumerState<OwnerRegisterScreen> {
     
     final stateAfter = ref.read(ownerAuthControllerProvider);
     
-    // Proceed to OTP stage even if registration "silently" failed due to existing account
+    // Proceed to OTP stage even if registration "silently" failed due to existing account.
+    // The OwnerService now handles password verification for existing accounts.
     if (stateAfter.isRegistrationStarted || stateAfter.errorMessage == null) {
       await controller.requestOtp();
       final stateAfterOtp = ref.read(ownerAuthControllerProvider);
       
       if (stateAfterOtp.isOtpSent && mounted) {
-        // SECURITY: Generic message that doesn't reveal the email address
+        // SECURITY: Generic message that doesn't reveal the specific email address
         CustomSnackBar.showSuccess(
           context,
-          'If authorized, a 6-digit verification code has been sent to your email.',
+          'A verification code has been sent to the owner email. Please enter it to continue.',
         );
         context.goNamed(RouteNames.verifyEmail);
       }
@@ -66,10 +67,11 @@ class _OwnerRegisterScreenState extends ConsumerState<OwnerRegisterScreen> {
     final state = ref.watch(ownerAuthControllerProvider);
 
     ref.listen<OwnerAuthState>(ownerAuthControllerProvider, (prev, next) {
-      // SECURITY: We only show non-auth errors here to avoid account enumeration
+      // SECURITY: Masking the 'already-in-use' error entirely in the UI.
+      // The flow will proceed to OTP verification automatically.
       if (next.errorMessage != null && 
           next.errorMessage!.isNotEmpty && 
-          !next.errorMessage!.contains('already-in-use')) {
+          !next.errorMessage!.toLowerCase().contains('already-in-use')) {
         CustomSnackBar.showError(context, next.errorMessage!);
       }
     });
@@ -98,7 +100,7 @@ class _OwnerRegisterScreenState extends ConsumerState<OwnerRegisterScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'Create your owner identity. A verification code will be sent to confirm access.',
+                    'Set up your owner identity. A 6-digit verification code will be sent to the registered email.',
                     style: AppTextStyles.bodyLarge,
                     textAlign: TextAlign.center,
                   ),
