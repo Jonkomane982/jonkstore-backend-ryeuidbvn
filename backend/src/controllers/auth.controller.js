@@ -10,45 +10,38 @@ const environment = require('../config/environment');
 
 /**
  * Controller for User Authentication.
- * Hardened with generic error messages to prevent account enumeration.
  */
 class AuthController {
+  /**
+   * Syncs Firebase authenticated user with the local database.
+   */
   login = asyncHandler(async (req, res) => {
     const { idToken } = req.body;
-
-    if (!idToken) {
-      throw new AuthenticationError('Authentication failed', 'MISSING_TOKEN');
-    }
+    if (!idToken) throw new AuthenticationError('Authentication failed', 'MISSING_TOKEN');
 
     let decodedToken;
     try {
       decodedToken = await firebaseAdminService.verifyIdToken(idToken);
     } catch (err) {
-      req.appLogger.error({ err }, 'Firebase token verification failed');
       throw new AuthenticationError('Authentication failed', 'INVALID_TOKEN');
     }
 
     const { uid, email, name } = decodedToken;
+    const loginEmail = email.toLowerCase();
+    const authorizedEmail = (environment.ownerEmail || '').toLowerCase();
 
-    if (!email) {
-      throw new AuthenticationError('Authentication failed', 'EMAIL_REQUIRED');
-    }
-
-    // SECURITY: Ensure only the authorized owner can log in/setup
-    const isAuthorizedOwner = environment.ownerEmail &&
-                             email.toLowerCase() === environment.ownerEmail.toLowerCase();
+    // SECURITY: Ensure only the authorized owner can access
+    const isAuthorizedOwner = authorizedEmail && loginEmail === authorizedEmail;
 
     let user = await authRepository.findUserByFirebaseUid(uid);
 
     if (!user) {
       if (!isAuthorizedOwner) {
-        req.appLogger.warn({ email }, 'Unauthorized login attempt blocked');
-        throw new AuthenticationError('Access denied', 'OWNER_ACCOUNT_REQUIRED');
+        throw new AuthenticationError('Access denied. This account is not authorized.', 'OWNER_ACCOUNT_REQUIRED');
       }
-
       user = await authRepository.createUser({
         firebase_uid: uid,
-        email: email.toLowerCase(),
+        email: loginEmail,
         username: name || email.split('@')[0],
         role_name: 'OWNER',
       });
@@ -60,40 +53,25 @@ class AuthController {
       success: true,
       message: 'Access granted',
       data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          role: user.role_name,
-          username: user.username,
-        }
+        user: { id: user.id, email: user.email, username: user.username, role: user.role_name }
       }
     });
   });
 
+  /**
+   * Triggers a 6-digit OTP for Owner Login/Setup verification.
+   */
   requestOwnerOtp = asyncHandler(async (req, res) => {
     const { email } = req.body;
+    const authorizedEmail = (environment.ownerEmail || '').toLowerCase();
 
-    // Masking: Always return success even if email doesn't match OWNER_EMAIL
-    // to prevent email discovery, but only send if it matches.
-    if (email && environment.ownerEmail && email.toLowerCase() === environment.ownerEmail.toLowerCase()) {
+    if (email && email.toLowerCase() === authorizedEmail) {
       const otpCode = generateOtp();
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
       await otpRepository.invalidatePreviousOtps(email, 'OWNER_VERIFICATION');
-      await otpRepository.createOtp({
-        email: email.toLowerCase(),
-        otpCode,
-        purpose: 'OWNER_VERIFICATION',
-        expiresAt,
-      });
-
-      await emailService.sendOwnerOtp({
-        to: email.toLowerCase(),
-        otpCode,
-        expiresAt,
-      });
-
-      req.appLogger.info({ email }, 'Verification code dispatched to authorized owner');
+      await otpRepository.createOtp({ email: email.toLowerCase(), otpCode, purpose: 'OWNER_VERIFICATION', expiresAt });
+      await emailService.sendOwnerOtp({ to: email.toLowerCase(), otpCode, expiresAt });
     }
 
     res.status(200).json({
@@ -102,77 +80,41 @@ class AuthController {
     });
   });
 
-  verifyOwnerOtp = asyncHandler(async (req, res) => {
-    const { email, otpCode } = req.body;
-    if (!email || !otpCode) throw new ValidationError('Credentials required');
+  /**
+   * Generates and sends a Firebase Password Reset link via SMTP.
+   */
+  requestOwnerPasswordReset = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    const authorizedEmail = (environment.ownerEmail || '').toLowerCase();
 
-    const otp = await otpRepository.findValidOtp(email.toLowerCase(), otpCode, 'OWNER_VERIFICATION');
-    if (!otp) {
-      // Generic error
-      throw new AuthenticationError('Invalid verification code');
+    if (email && email.toLowerCase() === authorizedEmail) {
+      const link = await firebaseAdminService.generatePasswordResetLink(email.toLowerCase());
+      await emailService.sendPasswordResetEmail({ to: email.toLowerCase(), link });
     }
-
-    await otpRepository.markAsUsed(otp.id);
 
     res.status(200).json({
       success: true,
-      message: 'Identity verified',
+      message: 'If authorized, a recovery link has been sent to your email.',
     });
   });
 
-  requestOwnerPasswordReset = asyncHandler(async (req, res) => {
-    const { email } = req.body;
-    const firebase = req.services && req.services.firebase ? req.services.firebase : firebaseAdminService;
-    const emailSvc = req.services && req.services.email ? req.services.email : emailService;
-
-    if (
-      email &&
-      environment.ownerEmail &&
-      email.toLowerCase() === environment.ownerEmail.toLowerCase()
-    ) {
-      const normalizedEmail = email.toLowerCase();
-      const link = await firebase.generatePasswordResetLink(normalizedEmail);
-      await emailSvc.sendPasswordResetEmail({ to: normalizedEmail, link });
-      req.appLogger.info({ email: normalizedEmail }, 'Password reset link dispatched to authorized owner');
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'If authorized, a password reset link has been sent to your email.',
-    });
+  verifyOwnerOtp = asyncHandler(async (req, res) => {
+    const { email, otpCode } = req.body;
+    const otp = await otpRepository.findValidOtp(email.toLowerCase(), otpCode, 'OWNER_VERIFICATION');
+    if (!otp) throw new AuthenticationError('Invalid or expired verification code');
+    await otpRepository.markAsUsed(otp.id);
+    res.status(200).json({ success: true, message: 'Identity verified' });
   });
 
   setupBusiness = asyncHandler(async (req, res) => {
     const { businessName, industry, ownerFullName } = req.body;
-
-    if (!req.user || !req.user.id) {
-      throw new AuthenticationError('Session expired');
-    }
-
-    if (!businessName || !ownerFullName) {
-      throw new ValidationError('All fields are required');
-    }
-
-    const business = await authRepository.setupNewBusiness(req.user.id, {
-      name: businessName,
-      industry,
-      ownerFullName
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Business setup successful',
-      data: {
-        business: { id: business.id, name: business.name }
-      }
-    });
+    if (!req.user) throw new AuthenticationError('Session expired');
+    const business = await authRepository.setupNewBusiness(req.user.id, { name: businessName, industry, ownerFullName });
+    res.status(201).json({ success: true, message: 'Setup complete', data: { business } });
   });
 
   me = asyncHandler(async (req, res) => {
-    res.status(200).json({
-      success: true,
-      data: { user: req.user }
-    });
+    res.status(200).json({ success: true, data: { user: req.user } });
   });
 }
 

@@ -33,10 +33,20 @@ class _OwnerLoginScreenState extends ConsumerState<OwnerLoginScreen> {
 
   Future<void> _onSubmit() async {
     if (!_formKey.currentState!.validate()) return;
-    await ref.read(ownerAuthControllerProvider.notifier).login(
-          username: _usernameController.text.trim(),
-          password: _passwordController.text,
-        );
+    
+    final controller = ref.read(ownerAuthControllerProvider.notifier);
+    
+    // Verifies password then triggers OTP flow
+    await controller.login(
+      username: _usernameController.text.trim(),
+      password: _passwordController.text,
+    );
+    
+    final state = ref.read(ownerAuthControllerProvider);
+    if (state.isOtpSent && mounted) {
+      CustomSnackBar.showSuccess(context, 'Verification code sent to owner email.');
+      context.goNamed(RouteNames.verifyEmail);
+    }
   }
 
   Future<void> _handleGoogleSignIn() async {
@@ -86,7 +96,6 @@ class _OwnerLoginScreenState extends ConsumerState<OwnerLoginScreen> {
                     ),
                     const SizedBox(height: AppSpacing.xxl),
                     
-                    // Traditional Login
                     AppTextField(
                       label: 'Username',
                       hintText: 'Enter owner username',
@@ -100,6 +109,25 @@ class _OwnerLoginScreenState extends ConsumerState<OwnerLoginScreen> {
                       validator: (v) => AppValidators.required(v, 'Password'),
                       onFieldSubmitted: (_) => _onSubmit(),
                     ),
+                    
+                    // ACCOUNT RECOVERY: Forgot Password
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () {
+                          ref.read(ownerAuthControllerProvider.notifier).forgotPassword();
+                          CustomSnackBar.showSuccess(context, 'If authorized, a reset link has been sent.');
+                        },
+                        child: Text(
+                          'Forgot Password?',
+                          style: AppTextStyles.body.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    
                     const SizedBox(height: AppSpacing.md),
                     PrimaryButton(
                       text: 'Sign In',
@@ -111,7 +139,6 @@ class _OwnerLoginScreenState extends ConsumerState<OwnerLoginScreen> {
                     _buildDivider(),
                     const SizedBox(height: AppSpacing.xl),
                     
-                    // Google Sign-In
                     _GoogleSignInButton(
                       isLoading: state.isLoading,
                       onPressed: _handleGoogleSignIn,
