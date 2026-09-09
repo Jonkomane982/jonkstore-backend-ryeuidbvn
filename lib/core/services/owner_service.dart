@@ -13,10 +13,11 @@ import 'package:jonkstore/core/network/result.dart';
 import 'package:jonkstore/core/errors/failures.dart';
 import 'package:jonkstore/firebase_options.dart';
 import 'package:jonkstore/core/services/password_service.dart';
+import 'package:jonkstore/core/services/otp_service.dart';
 import 'package:jonkstore/core/network/api_client.dart';
 
 /// Owner authentication orchestrator.
-/// Bypasses Firestore for OTPs by using the Node.js Backend as the source of truth.
+/// Bypasses Firestore for OTPs by using the Node.js Backend as the authoritative source.
 class OwnerService {
   final FirebaseAuth? _firebaseAuth;
   final OwnerRepository _ownerRepository;
@@ -35,7 +36,7 @@ class OwnerService {
 
   bool get _firebaseInitialized => Firebase.apps.isNotEmpty;
 
-  /// Handles first-time setup or verifies password for existing account.
+  /// Handles first-time owner setup or password verification for existing account.
   Future<Result<void>> startOwnerRegistration({
     required String username,
     required String password,
@@ -52,7 +53,7 @@ class OwnerService {
         _capturePendingReg(username, passwordHash, cred.user!.uid);
       } on FirebaseAuthException catch (e) {
         if (e.code == 'email-already-in-use') {
-          // SECURITY MASKING: Sign in to verify password, then move to OTP
+          // SECURITY MASKING: Sign in to verify password, then move to OTP verification.
           try {
             final cred = await _signInOrCreateWithRetries(
               create: false,
@@ -61,15 +62,15 @@ class OwnerService {
             );
             _capturePendingReg(username, passwordHash, cred.user!.uid);
           } catch (_) {
-            return Result.failure(const AuthFailure('Authentication failed. Check your credentials.'));
+            return Result.failure(const AuthFailure('Authentication failed. Please check your credentials.'));
           }
         } else {
-          return Result.failure(const AuthFailure('Registration error. Please try again.'));
+          return Result.failure(const AuthFailure('Registration failed. Please try again.'));
         }
       }
       return Result.success(null);
     } catch (e) {
-      return Result.failure(const AuthFailure('System error. Please try again later.'));
+      return Result.failure(const AuthFailure('A technical error occurred. Please try again.'));
     }
   }
 
@@ -83,10 +84,11 @@ class OwnerService {
     _lastRegistrationUsername = username.trim();
   }
 
-  /// Trigger Backend to send verification code via SMTP
+  /// REST ROUTE: Trigger Backend to send OTP via SMTP
   Future<Result<String>> requestOtpCode() async {
     try {
-      await _apiClient.post('/auth/owner/request-otp', data: {
+      // Relative path 'auth/...' to respect the '/api' prefix in Environment.baseUrl
+      await _apiClient.post('auth/owner/request-otp', data: {
         'email': AppOwner.ownerEmail,
       });
       return Result.success('sent');
@@ -95,16 +97,16 @@ class OwnerService {
     }
   }
 
-  /// Verify code against Backend database
+  /// REST ROUTE: Verify OTP against Backend
   Future<Result<void>> verifyOtp(String code) async {
     try {
-      await _apiClient.post('/auth/owner/verify-otp', data: {
+      await _apiClient.post('auth/owner/verify-otp', data: {
         'email': AppOwner.ownerEmail,
         'otpCode': code.trim(),
       });
       return Result.success(null);
     } catch (e) {
-      return Result.failure(const AuthFailure('Invalid verification code.'));
+      return Result.failure(const AuthFailure('Invalid or expired verification code.'));
     }
   }
 
@@ -112,7 +114,7 @@ class OwnerService {
     try {
       final GoogleSignIn googleSignIn = GoogleSignIn();
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser == null) return Result.failure(const AuthFailure('Cancelled.'));
+      if (googleUser == null) return Result.failure(const AuthFailure('Sign-in cancelled.'));
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final AuthCredential credential = GoogleAuthProvider.credential(
@@ -123,14 +125,15 @@ class OwnerService {
       final UserCredential userCredential = await _firebaseAuth!.signInWithCredential(credential);
       final idToken = await userCredential.user!.getIdToken();
 
-      final response = await _apiClient.post('/auth/login', data: {'idToken': idToken});
+      // Sync with Backend
+      final response = await _apiClient.post('auth/login', data: {'idToken': idToken});
       
       final profile = OwnerProfile.fromJson(response.data['data']['user']);
       await _ownerRepository.saveProfile(profile);
 
       return Result.success(profile);
     } catch (e) {
-      return Result.failure(const AuthFailure('Access denied. Check the authorized owner account.'));
+      return Result.failure(const AuthFailure('Access denied. Ensure you are using the authorized owner account.'));
     }
   }
 
@@ -146,14 +149,13 @@ class OwnerService {
       );
       
       final idToken = await cred.user!.getIdToken();
-      final response = await _apiClient.post('/auth/login', data: {'idToken': idToken});
+      final response = await _apiClient.post('auth/login', data: {'idToken': idToken});
       
       final profile = OwnerProfile.fromJson(response.data['data']['user']);
       await _ownerRepository.saveProfile(profile);
       
       return Result.success(profile);
     } catch (e) {
-      // SECURITY MASKING
       return Result.failure(const AuthFailure('Invalid username or password.'));
     }
   }
@@ -172,7 +174,7 @@ class OwnerService {
       await _firebaseAuth?.currentUser?.sendEmailVerification();
       return Result.success(null);
     } catch (e) {
-      return Result.failure(const AuthFailure('Request failed.'));
+      return Result.failure(const AuthFailure('Action failed.'));
     }
   }
 
@@ -181,7 +183,7 @@ class OwnerService {
       await _firebaseAuth?.sendPasswordResetEmail(email: AppOwner.ownerEmail);
       return Result.success(null);
     } catch (e) {
-      return Result.failure(const AuthFailure('Request failed.'));
+      return Result.failure(const AuthFailure('Action failed.'));
     }
   }
 
@@ -191,7 +193,7 @@ class OwnerService {
   }) async {
     try {
       final user = _firebaseAuth?.currentUser;
-      if (user == null) return Result.failure(const AuthFailure('No active session.'));
+      if (user == null) return Result.failure(const AuthFailure('Session expired.'));
       await user.updatePassword(newPassword);
       return Result.success(null);
     } catch (e) {
@@ -205,7 +207,7 @@ class OwnerService {
   }) async {
     try {
       final reg = _pendingReg;
-      if (reg == null) return Result.failure(const AuthFailure('Registration expired.'));
+      if (reg == null) return Result.failure(const AuthFailure('Session expired.'));
 
       final profile = OwnerProfile(
         id: const Uuid().v4(),

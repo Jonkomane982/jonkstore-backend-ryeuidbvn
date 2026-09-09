@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:jonkstore/core/providers/core_providers.dart';
@@ -8,6 +7,7 @@ import 'package:jonkstore/core/domain/models/owner_profile.dart';
 import 'package:jonkstore/datasources/local/owner_local_datasource.dart';
 import 'package:jonkstore/repositories/owner_repository.dart';
 import 'package:jonkstore/repositories/owner_repository_impl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Provider for the [OwnerLocalDataSource].
 final ownerLocalDataSourceProvider = Provider<OwnerLocalDataSource>((ref) {
@@ -19,7 +19,7 @@ final ownerRepositoryProvider = Provider<OwnerRepository>((ref) {
   return OwnerRepositoryImpl(ref.watch(ownerLocalDataSourceProvider));
 });
 
-/// Provider for the [OtpService] used by [OwnerService] for OTP lifecycle.
+/// Provider for the [OtpService] (kept for legacy support, though logic moved to backend).
 final otpServiceForOwnerProvider = Provider<OtpService>((ref) {
   return OtpService(FirebaseFirestore.instance);
 });
@@ -29,7 +29,6 @@ final ownerServiceProvider = Provider<OwnerService>((ref) {
   return OwnerService(
     FirebaseAuth.instance,
     ref.watch(ownerRepositoryProvider),
-    ref.watch(otpServiceForOwnerProvider),
     ref.watch(apiClientProvider),
   );
 });
