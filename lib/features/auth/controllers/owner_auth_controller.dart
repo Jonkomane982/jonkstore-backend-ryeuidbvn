@@ -11,7 +11,7 @@ class OwnerAuthState {
   final bool isLoginSuccess;
   final bool isVerified;
   final bool isPasswordResetSent;
-  
+
   // ---- OTP & 2FA State ----
   final bool isOtpSent;
   final bool isOtpVerified;
@@ -57,8 +57,10 @@ class OwnerAuthState {
       isOtpSent: isOtpSent ?? this.isOtpSent,
       isOtpVerified: isOtpVerified ?? this.isOtpVerified,
       isLoginOtpPending: isLoginOtpPending ?? this.isLoginOtpPending,
-      isRegistrationStarted: isRegistrationStarted ?? this.isRegistrationStarted,
-      onboardingNeedsBusinessSetup: onboardingNeedsBusinessSetup ?? this.onboardingNeedsBusinessSetup,
+      isRegistrationStarted:
+          isRegistrationStarted ?? this.isRegistrationStarted,
+      onboardingNeedsBusinessSetup:
+          onboardingNeedsBusinessSetup ?? this.onboardingNeedsBusinessSetup,
     );
   }
 }
@@ -70,55 +72,115 @@ class OwnerAuthController extends StateNotifier<OwnerAuthState> {
 
   /// Google Sign-In: Direct access for authorized owner
   Future<void> signInWithGoogle() async {
-    state = state.copyWith(isLoading: true, errorMessage: null, clearErrorMessage: true);
+    state = state.copyWith(
+      isLoading: true,
+      errorMessage: null,
+      clearErrorMessage: true,
+    );
     final result = await _ownerService.signInWithGoogle();
     result.fold(
-      (profile) => state = state.copyWith(isLoading: false, profile: profile, isLoginSuccess: true),
-      (failure) => state = state.copyWith(isLoading: false, errorMessage: failure.message),
+      (profile) => state = state.copyWith(
+        isLoading: false,
+        profile: profile,
+        isLoginSuccess: true,
+      ),
+      (failure) => state = state.copyWith(
+        isLoading: false,
+        errorMessage: failure.message,
+      ),
     );
   }
 
   /// Start Registration: Verifies credentials then asks for OTP
-  Future<void> startRegistration({required String username, required String password}) async {
-    state = state.copyWith(isLoading: true, errorMessage: null, clearErrorMessage: true);
-    final result = await _ownerService.startOwnerRegistration(username: username, password: password);
+  Future<void> startRegistration({
+    required String username,
+    required String password,
+  }) async {
+    state = state.copyWith(
+      isLoading: true,
+      errorMessage: null,
+      clearErrorMessage: true,
+    );
+    final result = await _ownerService.startOwnerRegistration(
+      username: username,
+      password: password,
+    );
     result.fold(
-      (_) => state = state.copyWith(isLoading: false, isRegistrationStarted: true, isLoginOtpPending: false),
-      (failure) => state = state.copyWith(isLoading: false, errorMessage: failure.message),
+      (_) => state = state.copyWith(
+        isLoading: false,
+        isRegistrationStarted: true,
+        isLoginOtpPending: false,
+      ),
+      (failure) => state = state.copyWith(
+        isLoading: false,
+        errorMessage: failure.message,
+      ),
     );
   }
 
   /// Start Login: Verifies credentials then triggers OTP flow (2FA)
-  Future<void> login({required String username, required String password}) async {
-    state = state.copyWith(isLoading: true, errorMessage: null, clearErrorMessage: true);
-    final result = await _ownerService.startOwnerLogin(username: username, password: password);
-    
+  Future<void> login({
+    required String username,
+    required String password,
+  }) async {
+    state = state.copyWith(
+      isLoading: true,
+      errorMessage: null,
+      clearErrorMessage: true,
+    );
+    final result = await _ownerService.startOwnerLogin(
+      username: username,
+      password: password,
+    );
+
     result.fold(
       (_) async {
         // Password correct, now request OTP for 2FA
         final otpResult = await _ownerService.requestOtpCode();
         otpResult.fold(
-          (_) => state = state.copyWith(isLoading: false, isOtpSent: true, isLoginOtpPending: true),
-          (f) => state = state.copyWith(isLoading: false, errorMessage: f.message),
+          (_) => state = state.copyWith(
+            isLoading: false,
+            isOtpSent: true,
+            isLoginOtpPending: true,
+          ),
+          (f) =>
+              state = state.copyWith(isLoading: false, errorMessage: f.message),
         );
       },
-      (failure) => state = state.copyWith(isLoading: false, errorMessage: failure.message),
+      (failure) => state = state.copyWith(
+        isLoading: false,
+        errorMessage: failure.message,
+      ),
     );
   }
 
   /// Request code (Shared by Login and Registration)
   Future<void> requestOtp() async {
-    state = state.copyWith(isLoading: true, errorMessage: null, clearErrorMessage: true);
+    state = state.copyWith(
+      isLoading: true,
+      errorMessage: null,
+      clearErrorMessage: true,
+    );
     final result = await _ownerService.requestOtpCode();
     result.fold(
       (_) => state = state.copyWith(isLoading: false, isOtpSent: true),
-      (failure) => state = state.copyWith(isLoading: false, errorMessage: failure.message),
+      (failure) => state = state.copyWith(
+        isLoading: false,
+        errorMessage: failure.message,
+      ),
     );
   }
 
+  /// Resend OTP (alias for requestOtp, used by verify email screen)
+  Future<void> resendOtp() async => requestOtp();
+
   /// Verify OTP: Decides whether to go to Dashboard or Business Setup
   Future<void> verifyOtp(String code) async {
-    state = state.copyWith(isLoading: true, errorMessage: null, clearErrorMessage: true);
+    state = state.copyWith(
+      isLoading: true,
+      errorMessage: null,
+      clearErrorMessage: true,
+    );
     final result = await _ownerService.verifyOtp(code);
 
     if (result.isSuccess) {
@@ -126,25 +188,42 @@ class OwnerAuthController extends StateNotifier<OwnerAuthState> {
         // Finalize Login
         final syncResult = await _ownerService.finalizeLoginSync();
         syncResult.fold(
-          (profile) => state = state.copyWith(isLoading: false, isOtpVerified: true, isLoginSuccess: true, profile: profile),
-          (f) => state = state.copyWith(isLoading: false, errorMessage: f.message),
+          (profile) => state = state.copyWith(
+            isLoading: false,
+            isOtpVerified: true,
+            isLoginSuccess: true,
+            profile: profile,
+          ),
+          (f) =>
+              state = state.copyWith(isLoading: false, errorMessage: f.message),
         );
       } else {
         // Registration successful, proceed to setup
-        state = state.copyWith(isLoading: false, isOtpVerified: true, onboardingNeedsBusinessSetup: true);
+        state = state.copyWith(
+          isLoading: false,
+          isOtpVerified: true,
+          onboardingNeedsBusinessSetup: true,
+        );
       }
     } else {
-      state = state.copyWith(isLoading: false, errorMessage: result.failure.message);
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: result.failure.message,
+      );
     }
   }
 
   /// Account Recovery: Request Reset Link
-  Future<void> forgotPassword() async {
+  Future<void> forgotPassword({String? email}) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
-    final result = await _ownerService.requestPasswordReset();
+    final result = await _ownerService.requestPasswordReset(email: email);
     result.fold(
-      (_) => state = state.copyWith(isLoading: false, isPasswordResetSent: true),
-      (failure) => state = state.copyWith(isLoading: false, errorMessage: failure.message),
+      (_) =>
+          state = state.copyWith(isLoading: false, isPasswordResetSent: true),
+      (failure) => state = state.copyWith(
+        isLoading: false,
+        errorMessage: failure.message,
+      ),
     );
   }
 
@@ -153,6 +232,7 @@ class OwnerAuthController extends StateNotifier<OwnerAuthState> {
   }
 }
 
-final ownerAuthControllerProvider = StateNotifierProvider<OwnerAuthController, OwnerAuthState>((ref) {
-  return OwnerAuthController(ref.watch(ownerServiceProvider));
-});
+final ownerAuthControllerProvider =
+    StateNotifierProvider<OwnerAuthController, OwnerAuthState>((ref) {
+      return OwnerAuthController(ref.watch(ownerServiceProvider));
+    });

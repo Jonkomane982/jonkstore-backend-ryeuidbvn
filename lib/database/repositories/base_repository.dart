@@ -5,7 +5,7 @@ import '../database_constants.dart';
 /// A generic repository providing basic CRUD operations for SQLite tables.
 /// 
 /// [T] represents the model type.
-/// [M] represents the Map type returned by SQLite (usually Map<String, dynamic>).
+/// [M] represents the Map type returned by SQLite (usually `Map<String, dynamic>`).
 abstract class BaseRepository<T> {
   final DatabaseService databaseService;
   final String tableName;

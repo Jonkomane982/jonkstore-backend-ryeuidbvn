@@ -59,7 +59,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Owner Registration'),
+        title: const Text('Create Account'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -75,7 +75,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Create an owner account to start managing your business.',
+                  'Create an account to start managing your business. Your account will be reviewed and activated by an admin shortly.',
                   style: AppTextStyles.bodyLarge,
                 ),
                 const SizedBox(height: AppSpacing.xxl),

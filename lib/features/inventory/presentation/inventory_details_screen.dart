@@ -27,15 +27,19 @@ class InventoryDetailsScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<InventoryDetailsScreen> createState() => _InventoryDetailsScreenState();
+  ConsumerState<InventoryDetailsScreen> createState() =>
+      _InventoryDetailsScreenState();
 }
 
-class _InventoryDetailsScreenState extends ConsumerState<InventoryDetailsScreen> {
+class _InventoryDetailsScreenState
+    extends ConsumerState<InventoryDetailsScreen> {
   @override
   void initState() {
     super.initState();
     Future.microtask(() {
-      ref.read(inventoryControllerProvider.notifier).loadHistory(widget.productId);
+      ref
+          .read(inventoryControllerProvider.notifier)
+          .loadHistory(widget.productId);
     });
   }
 
@@ -46,7 +50,9 @@ class _InventoryDetailsScreenState extends ConsumerState<InventoryDetailsScreen>
 
     // Find the specific inventory and product locally
     final inventory = inventoryState.inventoryItems.firstWhere(
-      (element) => element.productId == widget.productId && element.branchId == widget.branchId,
+      (element) =>
+          element.productId == widget.productId &&
+          element.branchId == widget.branchId,
       orElse: () => null as dynamic,
     );
 
@@ -105,7 +111,7 @@ class _InventoryDetailsScreenState extends ConsumerState<InventoryDetailsScreen>
           ),
           if (isLowStock)
             Container(
-              margin: const EdgeInsets.top(AppSpacing.sm),
+              margin: const EdgeInsets.only(top: AppSpacing.sm),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
                 color: AppColors.error.withOpacity(0.1),
@@ -132,13 +138,25 @@ class _InventoryDetailsScreenState extends ConsumerState<InventoryDetailsScreen>
         children: [
           _buildInfoRow('SKU', product.sku ?? 'N/A'),
           _buildInfoRow('Barcode', product.barcode ?? 'N/A'),
-          _buildInfoRow('Category ID', product.categoryId),
+          _buildInfoRow('Category ID', product.categoryId ?? 'N/A'),
           const Divider(height: 32),
           _buildInfoRow('Unit Cost', 'KES ${cost.toStringAsFixed(2)}'),
-          _buildInfoRow('Inventory Value', 'KES ${valuation.toStringAsFixed(2)}', isBold: true),
+          _buildInfoRow(
+            'Inventory Value',
+            'KES ${valuation.toStringAsFixed(2)}',
+            isBold: true,
+          ),
           const Divider(height: 32),
-          _buildInfoRow('Threshold', '${inventory.lowStockThreshold ?? 0} units'),
-          _buildInfoRow('Last Count', inventory.lastCountDate != null ? DateFormat('dd MMM yyyy').format(inventory.lastCountDate!) : 'Never'),
+          _buildInfoRow(
+            'Threshold',
+            '${inventory.lowStockThreshold ?? 0} units',
+          ),
+          _buildInfoRow(
+            'Last Count',
+            inventory.lastCountDate != null
+                ? DateFormat('dd MMM yyyy').format(inventory.lastCountDate!)
+                : 'Never',
+          ),
         ],
       ),
     );
@@ -150,7 +168,10 @@ class _InventoryDetailsScreenState extends ConsumerState<InventoryDetailsScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: AppTextStyles.body.copyWith(color: AppColors.grey500)),
+          Text(
+            label,
+            style: AppTextStyles.body.copyWith(color: AppColors.grey500),
+          ),
           Text(
             value,
             style: AppTextStyles.body.copyWith(
@@ -162,7 +183,11 @@ class _InventoryDetailsScreenState extends ConsumerState<InventoryDetailsScreen>
     );
   }
 
-  Widget _buildActionButtons(BuildContext context, Inventory inventory, Product product) {
+  Widget _buildActionButtons(
+    BuildContext context,
+    Inventory inventory,
+    Product product,
+  ) {
     return Row(
       children: [
         Expanded(
@@ -197,11 +222,17 @@ class _InventoryDetailsScreenState extends ConsumerState<InventoryDetailsScreen>
         return ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(
-            tx.quantityChange > 0 ? Icons.add_circle_outline : Icons.remove_circle_outline,
+            tx.quantityChange > 0
+                ? Icons.add_circle_outline
+                : Icons.remove_circle_outline,
             color: tx.quantityChange > 0 ? AppColors.success : AppColors.error,
           ),
-          title: Text('${tx.quantityChange > 0 ? '+' : ''}${tx.quantityChange} units'),
-          subtitle: Text(DateFormat('dd MMM, hh:mm a').format(tx.transactionDate)),
+          title: Text(
+            '${tx.quantityChange > 0 ? '+' : ''}${tx.quantityChange} units',
+          ),
+          subtitle: Text(
+            DateFormat('dd MMM, hh:mm a').format(tx.transactionDate),
+          ),
           trailing: Text(
             tx.type.name.toUpperCase(),
             style: AppTextStyles.caption,

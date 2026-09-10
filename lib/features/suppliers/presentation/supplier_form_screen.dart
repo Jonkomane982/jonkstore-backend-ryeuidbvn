@@ -561,7 +561,7 @@ class _SectionHeader extends StatelessWidget {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.12),
+            color: AppColors.primary.withValues(alpha: 0.12),
             borderRadius: AppRadius.borderRadiusMd,
           ),
           child: Icon(icon, color: AppColors.primary, size: 20),

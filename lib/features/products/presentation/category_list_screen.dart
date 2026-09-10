@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:jonkstore/app/theme/app_colors.dart';
 import 'package:jonkstore/app/theme/app_spacing.dart';
 import 'package:jonkstore/app/theme/app_text_styles.dart';
@@ -20,7 +18,6 @@ import 'package:jonkstore/shared/loading/loading_indicator.dart';
 import 'package:jonkstore/shared/loading/empty_state.dart';
 import 'package:jonkstore/shared/cards/primary_card.dart';
 import 'package:jonkstore/shared/cards/stat_card.dart';
-import 'package:jonkstore/features/dashboard/providers/dashboard_providers.dart';
 
 class CategoryListScreen extends ConsumerStatefulWidget {
   const CategoryListScreen({super.key});
@@ -286,7 +283,7 @@ class _CategoryListItem extends ConsumerWidget {
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: (category.isDeleted ? AppColors.grey400 : AppColors.primary).withOpacity(0.08),
+                  color: (category.isDeleted ? AppColors.grey400 : AppColors.primary).withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
@@ -567,7 +564,7 @@ class _SyncStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(

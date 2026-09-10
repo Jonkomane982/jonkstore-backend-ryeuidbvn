@@ -21,7 +21,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+
   // Controllers for editable settings
   final _currencyController = TextEditingController();
   final _taxNameController = TextEditingController();
@@ -31,7 +31,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(settingsControllerProvider.notifier).loadSettings());
+    Future.microtask(
+      () => ref.read(settingsControllerProvider.notifier).loadSettings(),
+    );
   }
 
   @override
@@ -65,7 +67,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
 
     await ref.read(settingsControllerProvider.notifier).updateSettings(updated);
-    
+
     if (mounted) {
       CustomSnackBar.showSuccess(context, 'Settings updated successfully');
     }
@@ -104,8 +106,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   children: [
                     _buildBusinessInfoSection(businessAsync),
                     const SizedBox(height: AppSpacing.xl),
-                    
-                    Text('Localization & Currency', style: AppTextStyles.subtitle),
+
+                    Text(
+                      'Localization & Currency',
+                      style: AppTextStyles.subtitle,
+                    ),
                     const SizedBox(height: AppSpacing.md),
                     AppTextField(
                       label: 'Currency Code',
@@ -138,7 +143,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     const SizedBox(height: AppSpacing.xl),
 
-                    Text('Receipt Configuration', style: AppTextStyles.subtitle),
+                    Text(
+                      'Receipt Configuration',
+                      style: AppTextStyles.subtitle,
+                    ),
                     const SizedBox(height: AppSpacing.md),
                     AppTextField(
                       label: 'Receipt Footer Message',
@@ -179,23 +187,85 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(business?.name ?? 'No Business', style: AppTextStyles.subtitle),
-                        Text(business?.email ?? 'No email set', style: AppTextStyles.bodySmall),
+                        Text(
+                          business?.name ?? 'No Business',
+                          style: AppTextStyles.subtitle,
+                        ),
+                        Text(
+                          business?.email ?? 'No email set',
+                          style: AppTextStyles.bodySmall,
+                        ),
                       ],
                     ),
                   ),
                 ],
               ),
               const Divider(height: 32),
-              _InfoTile(label: 'Business Type', value: business?.businessType ?? 'N/A'),
+              _InfoTile(
+                label: 'Business Type',
+                value: business?.businessType ?? 'N/A',
+              ),
               _InfoTile(label: 'Country', value: business?.country ?? 'N/A'),
               _InfoTile(label: 'Timezone', value: business?.timezone ?? 'N/A'),
             ],
           ),
         ),
       ),
-      loading: () => const SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
+      loading: () => const SizedBox(
+        height: 100,
+        child: Center(child: CircularProgressIndicator()),
+      ),
       error: (_, _) => const Text('Error loading business info'),
+    );
+  }
+
+  Widget _buildAdminToolsSection() {
+    final currentUser = ref.watch(currentUserProvider);
+    final isAdmin =
+        currentUser?.role == UserRole.admin ||
+        currentUser?.role == UserRole.owner;
+    if (!isAdmin) return const SizedBox.shrink();
+
+    return Card(
+      color: AppColors.primary.withOpacity(0.04),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.shield_outlined, color: AppColors.primary, size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Text('Admin Tools', style: AppTextStyles.subtitle),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Advanced features for system administrators.',
+              style: AppTextStyles.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: AppColors.primary.withOpacity(0.2)),
+              ),
+              tileColor: Theme.of(context).cardColor,
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primary.withOpacity(0.12),
+                child: Icon(Icons.manage_accounts, color: AppColors.primary),
+              ),
+              title: const Text('User Management'),
+              subtitle: const Text(
+                'View, activate, suspend, delete, and manage user roles',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.pushNamed(RouteNames.userManagement),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -212,8 +282,14 @@ class _InfoTile extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.grey500)),
-          Text(value, style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.grey500),
+          ),
+          Text(
+            value,
+            style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );

@@ -1063,16 +1063,12 @@ class InMemoryWebDatabaseFactory implements DatabaseFactory {
   @override
   Future<String> getDatabasesPath() async => '/jonkstore-web-dbs';
 
-  @override
   bool get hasStorageCapability => true;
 
-  @override
   void resetHasStorageCapability() {}
 
-  @override
   Future<void> fixDatabaseNotFound(String path) async {}
 
-  @override
   Future<bool> safeDeleteDatabase(String path) async {
     try {
       await deleteDatabase(path);
@@ -1082,6 +1078,5 @@ class InMemoryWebDatabaseFactory implements DatabaseFactory {
     }
   }
 
-  @override
   set databaseFactoryLogger(void Function(String message) logger) {}
 }

@@ -440,7 +440,7 @@ class _SupplierTile extends StatelessWidget {
                                       : supplier.isActive
                                       ? AppColors.secondary
                                       : AppColors.warning)
-                                  .withOpacity(0.12),
+                                  .withValues(alpha: 0.12),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(

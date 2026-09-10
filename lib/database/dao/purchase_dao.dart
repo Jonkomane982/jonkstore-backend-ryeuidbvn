@@ -157,4 +157,15 @@ class PurchaseDao {
     
     return (result.first['total_investment'] as num?)?.toDouble() ?? 0.0;
   }
+
+  /// Retrieves typed purchase order items for a specific order.
+  Future<List<PurchaseOrderItem>> getOrderItems(String orderId) async {
+    final db = await _databaseService.database;
+    final rows = await db.query(
+      DatabaseConstants.tablePurchaseOrderItems,
+      where: '${DatabaseConstants.columnPurchaseOrderId} = ?',
+      whereArgs: [orderId],
+    );
+    return rows.map((row) => PurchaseOrderItem.fromJson(row)).toList();
+  }
 }

@@ -3,7 +3,7 @@ enum AppPermission {
   viewDashboard,
   manageProducts,
   manageCategories,
-  
+
   // Inventory
   manageInventory, // Added as a catch-all or high-level permission
   viewInventory,
@@ -22,4 +22,7 @@ enum AppPermission {
   manageSettings,
   viewProfit,
   useAi,
+
+  /// Admin-only: list, activate, suspend, delete, and change roles of users.
+  manageUsers,
 }

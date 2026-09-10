@@ -92,7 +92,7 @@ class _CustomerListScreenState extends ConsumerState<CustomerListScreen> {
               pathParameters: {'id': customer.id},
             ),
             leading: CircleAvatar(
-              backgroundColor: AppColors.primary.withOpacity(0.1),
+              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
               child: Text(
                 customer.name.substring(0, 1).toUpperCase(),
                 style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),

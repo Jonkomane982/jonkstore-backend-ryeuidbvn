@@ -1,16 +1,16 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:jonkstore/app/theme/app_colors.dart';
-import 'package:jonkstore/app/theme/app_spacing.dart';
-import 'package:jonkstore/app/theme/app_text_styles.dart';
-import 'package:jonkstore/core/routing/route_names.dart';
-import 'package:jonkstore/core/validators/app_validators.dart';
-import 'package:jonkstore/shared/buttons/primary_button.dart';
-import 'package:jonkstore/shared/textfields/app_text_field.dart';
-import 'package:jonkstore/shared/textfields/password_text_field.dart';
-import 'package:jonkstore/shared/snackbars/custom_snack_bar.dart';
-import '../controllers/owner_auth_controller.dart';
+import package:flutter/material.dart;
+import package:flutter_riverpod/flutter_riverpod.dart;
+import package:go_router/go_router.dart;
+import package:jonkstore/app/theme/app_colors.dart;
+import package:jonkstore/app/theme/app_spacing.dart;
+import package:jonkstore/app/theme/app_text_styles.dart;
+import package:jonkstore/core/routing/route_names.dart;
+import package:jonkstore/core/validators/app_validators.dart;
+import package:jonkstore/shared/buttons/primary_button.dart;
+import package:jonkstore/shared/textfields/app_text_field.dart;
+import package:jonkstore/shared/textfields/password_text_field.dart;
+import package:jonkstore/shared/snackbars/custom_snack_bar.dart;
+import ../controllers/owner_auth_controller.dart;
 
 class OwnerLoginScreen extends ConsumerStatefulWidget {
   const OwnerLoginScreen({super.key});
@@ -44,7 +44,7 @@ class _OwnerLoginScreenState extends ConsumerState<OwnerLoginScreen> {
     
     final state = ref.read(ownerAuthControllerProvider);
     if (state.isOtpSent && mounted) {
-      CustomSnackBar.showSuccess(context, 'Verification code sent to owner email.');
+      CustomSnackBar.showSuccess(context, Verification code sent to owner email.);
       context.goNamed(RouteNames.verifyEmail);
     }
   }
@@ -85,28 +85,28 @@ class _OwnerLoginScreenState extends ConsumerState<OwnerLoginScreen> {
                     const Icon(Icons.storefront_rounded, size: 72, color: AppColors.primary),
                     const SizedBox(height: AppSpacing.lg),
                     Text(
-                      'JonkStore POS',
+                      JonkStore POS,
                       style: AppTextStyles.headline.copyWith(color: AppColors.grey900),
                       textAlign: TextAlign.center,
                     ),
                     Text(
-                      'Owner Access',
+                      Owner Access,
                       style: AppTextStyles.bodyLarge.copyWith(color: AppColors.grey500),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppSpacing.xxl),
                     
                     AppTextField(
-                      label: 'Username',
-                      hintText: 'Enter owner username',
+                      label: Username,
+                      hintText: Enter owner username,
                       controller: _usernameController,
-                      validator: (v) => AppValidators.required(v, 'Username'),
+                      validator: (v) => AppValidators.required(v, Username),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     PasswordTextField(
-                      label: 'Password',
+                      label: Password,
                       controller: _passwordController,
-                      validator: (v) => AppValidators.required(v, 'Password'),
+                      validator: (v) => AppValidators.required(v, Password),
                       onFieldSubmitted: (_) => _onSubmit(),
                     ),
                     
@@ -116,10 +116,10 @@ class _OwnerLoginScreenState extends ConsumerState<OwnerLoginScreen> {
                       child: TextButton(
                         onPressed: () {
                           ref.read(ownerAuthControllerProvider.notifier).forgotPassword();
-                          CustomSnackBar.showSuccess(context, 'If authorized, a reset link has been sent.');
+                          CustomSnackBar.showSuccess(context, If authorized, a reset link has been sent.);
                         },
                         child: Text(
-                          'Forgot Password?',
+                          Forgot Password?,
                           style: AppTextStyles.body.copyWith(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w600,
@@ -130,7 +130,7 @@ class _OwnerLoginScreenState extends ConsumerState<OwnerLoginScreen> {
                     
                     const SizedBox(height: AppSpacing.md),
                     PrimaryButton(
-                      text: 'Sign In',
+                      text: Sign In,
                       isLoading: state.isLoading,
                       onPressed: _onSubmit,
                     ),
@@ -149,11 +149,11 @@ class _OwnerLoginScreenState extends ConsumerState<OwnerLoginScreen> {
                       onPressed: () => context.pushNamed(RouteNames.register),
                       child: RichText(
                         text: TextSpan(
-                          text: 'New to JonkStore? ',
+                          text: New to JonkStore? ,
                           style: AppTextStyles.body.copyWith(color: AppColors.grey600),
                           children: [
                             TextSpan(
-                              text: 'Create Owner Account',
+                              text: Create Owner Account,
                               style: AppTextStyles.body.copyWith(
                                 color: AppColors.primary,
                                 fontWeight: FontWeight.bold,
@@ -180,7 +180,7 @@ class _OwnerLoginScreenState extends ConsumerState<OwnerLoginScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           child: Text(
-            'OR',
+            OR,
             style: AppTextStyles.caption.copyWith(color: AppColors.grey400),
           ),
         ),
@@ -209,13 +209,13 @@ class _GoogleSignInButton extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.network(
-            'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_\"G\"_Logo.svg',
+            https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_\"G\"_Logo.svg,
             height: 20,
             errorBuilder: (context, _, __) => const Icon(Icons.g_mobiledata, size: 24),
           ),
           const SizedBox(width: 12),
           Text(
-            'Continue with Google',
+            Continue with Google,
             style: AppTextStyles.button.copyWith(color: AppColors.grey800),
           ),
         ],

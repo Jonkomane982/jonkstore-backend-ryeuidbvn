@@ -67,7 +67,7 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
               pathParameters: {'id': employee.id},
             ),
             leading: CircleAvatar(
-              backgroundColor: AppColors.primary.withOpacity(0.1),
+              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
               child: const Icon(Icons.person_outline, color: AppColors.primary),
             ),
             title: Text(employee.designation, style: AppTextStyles.subtitle),
@@ -75,7 +75,7 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
             trailing: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: employee.isActive ? AppColors.success.withOpacity(0.1) : AppColors.error.withOpacity(0.1),
+                color: employee.isActive ? AppColors.success.withValues(alpha: 0.1) : AppColors.error.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(

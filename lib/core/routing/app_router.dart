@@ -18,15 +18,8 @@ import '../../features/inventory/presentation/inventory_history_screen.dart';
 import '../../features/inventory/presentation/inventory_adjustment_screen.dart';
 import '../../features/sales/presentation/sales_screen.dart';
 import '../../features/customers/presentation/customer_list_screen.dart';
-import '../../features/customers/presentation/customer_form_screen.dart';
 import '../../features/suppliers/presentation/supplier_list_screen.dart';
-import '../../features/suppliers/presentation/supplier_form_screen.dart';
-import '../../features/suppliers/presentation/supplier_details_screen.dart';
-import '../../features/purchase_orders/presentation/purchase_order_list_screen.dart';
-import '../../features/purchase_orders/presentation/purchase_order_form_screen.dart';
-import '../../features/purchase_orders/presentation/purchase_order_details_screen.dart';
 import '../../features/employees/presentation/employee_list_screen.dart';
-import '../../features/employees/presentation/employee_form_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/notifications/presentation/notification_list_screen.dart';
@@ -47,22 +40,22 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/login',
       name: RouteNames.login,
-      builder: (context, state) => const OwnerLoginScreen(),
+      builder: (context, state) => const LoginScreen(),
     ),
     GoRoute(
       path: '/register',
       name: RouteNames.register,
-      builder: (context, state) => const OwnerRegisterScreen(),
+      builder: (context, state) => const RegisterScreen(),
     ),
     GoRoute(
       path: '/forgot-password',
       name: RouteNames.forgotPassword,
-      builder: (context, state) => const OwnerForgotPasswordScreen(),
+      builder: (context, state) => const ForgotPasswordScreen(),
     ),
     GoRoute(
       path: '/verify-email',
       name: RouteNames.verifyEmail,
-      builder: (context, state) => const OwnerVerifyEmailScreen(),
+      builder: (context, state) => const VerifyEmailScreen(),
     ),
     GoRoute(
       path: '/business-setup',
@@ -73,6 +66,11 @@ final GoRouter appRouter = GoRouter(
       path: '/dashboard',
       name: RouteNames.dashboard,
       builder: (context, state) => const DashboardScreen(),
+    ),
+    GoRoute(
+      path: '/user-management',
+      name: RouteNames.userManagement,
+      builder: (context, state) => const UserManagementScreen(),
     ),
 
     // Product Management Routes

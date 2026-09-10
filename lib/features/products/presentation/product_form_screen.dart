@@ -66,7 +66,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           _skuController.text = product.sku ?? '';
           _barcodeController.text = product.barcode ?? '';
           _priceController.text = product.price.toString();
-          _costPriceController.text = product.costPrice.toString() ?? '';
+          _costPriceController.text = product.costPrice.toString();
           _descriptionController.text = product.description ?? '';
           setState(() {
             _selectedCategoryId = product.categoryId;

@@ -4,9 +4,13 @@ import 'app_permission.dart';
 /// Mapping of [UserRole] to their respective [AppPermission] sets.
 class RolePermissions {
   static final Map<UserRole, Set<AppPermission>> _roleMapping = {
-    UserRole.owner: AppPermission.values.toSet(),
+    UserRole.owner: {
+      ...AppPermission.values,
+    },
 
-    UserRole.admin: AppPermission.values.toSet(),
+    UserRole.admin: {
+      ...AppPermission.values,
+    },
 
     UserRole.manager: {
       AppPermission.viewDashboard,

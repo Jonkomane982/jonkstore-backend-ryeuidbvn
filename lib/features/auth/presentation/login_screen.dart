@@ -119,6 +119,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     isLoading: state.isLoading,
                     onPressed: _onLogin,
                   ),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Don\'t have an account?',
+                        style: AppTextStyles.body,
+                      ),
+                      TextButton(
+                        onPressed: () => context.pushNamed(RouteNames.register),
+                        child: const Text('Create Account'),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

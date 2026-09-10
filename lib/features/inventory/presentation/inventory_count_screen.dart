@@ -14,6 +14,7 @@ import 'package:jonkstore/features/inventory/controllers/inventory_controller.da
 import 'package:jonkstore/features/products/controllers/product_controller.dart';
 import 'package:jonkstore/features/dashboard/providers/dashboard_providers.dart';
 import 'package:jonkstore/providers/auth_providers.dart';
+import 'package:jonkstore/providers/repository_providers.dart';
 import 'package:jonkstore/shared/buttons/primary_button.dart';
 import 'package:jonkstore/shared/textfields/app_text_field.dart';
 import 'package:jonkstore/shared/snackbars/custom_snack_bar.dart';
@@ -23,7 +24,8 @@ class InventoryCountScreen extends ConsumerStatefulWidget {
   const InventoryCountScreen({super.key});
 
   @override
-  ConsumerState<InventoryCountScreen> createState() => _InventoryCountScreenState();
+  ConsumerState<InventoryCountScreen> createState() =>
+      _InventoryCountScreenState();
 }
 
 class _InventoryCountScreenState extends ConsumerState<InventoryCountScreen> {
@@ -39,7 +41,9 @@ class _InventoryCountScreenState extends ConsumerState<InventoryCountScreen> {
   void _loadData() async {
     final business = await ref.read(currentBusinessProvider.future);
     if (business != null) {
-      await ref.read(inventoryControllerProvider.notifier).loadInventory(business.id);
+      await ref
+          .read(inventoryControllerProvider.notifier)
+          .loadInventory(business.id);
       await ref.read(productControllerProvider.notifier).loadProducts();
     }
   }
@@ -82,34 +86,43 @@ class _InventoryCountScreenState extends ConsumerState<InventoryCountScreen> {
       final productId = entry.key;
       final countedQty = entry.value;
 
-      final inventory = inventoryState.inventoryItems.firstWhere((i) => i.productId == productId);
+      final inventory = inventoryState.inventoryItems.firstWhere(
+        (i) => i.productId == productId,
+      );
       final variance = countedQty - inventory.quantity;
 
       if (variance != 0) {
-        transactions.add(InventoryTransaction(
-          id: const Uuid().v4(),
-          inventoryId: inventory.id,
-          productId: productId,
-          branchId: business.id,
-          type: InventoryTransactionType.stockCount,
-          quantityChange: variance,
-          previousQuantity: inventory.quantity,
-          newQuantity: countedQty,
-          referenceId: countId,
-          userId: user.id,
-          transactionDate: now,
-          createdAt: now,
-          updatedAt: now,
-          syncStatus: SyncStatus.pending,
-        ));
+        transactions.add(
+          InventoryTransaction(
+            id: const Uuid().v4(),
+            inventoryId: inventory.id,
+            productId: productId,
+            branchId: business.id,
+            type: InventoryTransactionType.stockCount,
+            quantityChange: variance,
+            previousQuantity: inventory.quantity,
+            newQuantity: countedQty,
+            referenceId: countId,
+            userId: user.id,
+            transactionDate: now,
+            createdAt: now,
+            updatedAt: now,
+            syncStatus: SyncStatus.pending,
+          ),
+        );
       }
     }
 
-    final result = await ref.read(inventoryRepositoryProvider).createStockCount(inventoryCount, transactions);
+    final result = await ref
+        .read(inventoryRepositoryProvider)
+        .createStockCount(inventoryCount, transactions);
 
     result.fold(
       (success) {
-        CustomSnackBar.showSuccess(context, 'Stock count reconciled successfully.');
+        CustomSnackBar.showSuccess(
+          context,
+          'Stock count reconciled successfully.',
+        );
         context.pop();
       },
       (failure) {
@@ -125,9 +138,7 @@ class _InventoryCountScreenState extends ConsumerState<InventoryCountScreen> {
     final productState = ref.watch(productControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Stock Count Session'),
-      ),
+      appBar: AppBar(title: const Text('Stock Count Session')),
       body: Column(
         children: [
           Expanded(
@@ -138,7 +149,10 @@ class _InventoryCountScreenState extends ConsumerState<InventoryCountScreen> {
                     itemCount: inventoryState.inventoryItems.length,
                     itemBuilder: (context, index) {
                       final item = inventoryState.inventoryItems[index];
-                      final product = productState.products.firstWhere((p) => p.id == item.productId, orElse: () => null as dynamic);
+                      final product = productState.products.firstWhere(
+                        (p) => p.id == item.productId,
+                        orElse: () => null as dynamic,
+                      );
 
                       return Card(
                         child: Padding(
@@ -149,8 +163,14 @@ class _InventoryCountScreenState extends ConsumerState<InventoryCountScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(product.name, style: AppTextStyles.subtitle),
-                                    Text('System: ${item.quantity.toStringAsFixed(0)}', style: AppTextStyles.bodySmall),
+                                    Text(
+                                      product.name,
+                                      style: AppTextStyles.subtitle,
+                                    ),
+                                    Text(
+                                      'System: ${item.quantity.toStringAsFixed(0)}',
+                                      style: AppTextStyles.bodySmall,
+                                    ),
                                   ],
                                 ),
                               ),

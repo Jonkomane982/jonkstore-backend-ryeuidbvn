@@ -15,7 +15,7 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-const { createApp, buildServices } = require('./app');
+const { createApp, buildServices, ensureIdentitySchema } = require('./app');
 const serverConfig = require('./config/server');
 const environment = require('./config/environment');
 const { logger } = require('./utils/logger');
@@ -29,6 +29,9 @@ const startupLogger = logger.child({ phase: 'startup' });
 function buildServer() {
   const services = buildServices();
   const app = createApp({ services });
+  ensureIdentitySchema().catch((err) => {
+    startupLogger.warn({ err }, 'Identity schema ensure step failed (non-fatal)');
+  });
   server = require('http').createServer(app);
 
   server.keepAliveTimeout = serverConfig.keepAliveTimeout;

@@ -6,6 +6,61 @@ const {
   ServiceUnavailableError,
 } = require('../utils/errors');
 const { asyncHandler } = require('../utils/helpers');
+const authRepository = require('../repositories/auth.repository');
+
+const ROLE_PERMISSIONS_MAP = {
+  ADMIN: [
+    'viewDashboard', 'manageProducts', 'manageCategories',
+    'manageInventory', 'viewInventory', 'adjustInventory',
+    'performStockCount', 'transferStock', 'viewInventoryCost',
+    'manageSales', 'manageCustomers', 'manageSuppliers', 'managePurchases',
+    'manageReports', 'manageNotifications', 'manageEmployees', 'manageSettings',
+    'viewProfit', 'useAi', 'manageUsers',
+  ],
+  OWNER: [
+    'viewDashboard', 'manageProducts', 'manageCategories',
+    'manageInventory', 'viewInventory', 'adjustInventory',
+    'performStockCount', 'transferStock', 'viewInventoryCost',
+    'manageSales', 'manageCustomers', 'manageSuppliers', 'managePurchases',
+    'manageReports', 'manageNotifications', 'manageEmployees', 'manageSettings',
+    'viewProfit', 'useAi', 'manageUsers',
+  ],
+  MANAGER: [
+    'viewDashboard', 'manageProducts', 'manageCategories', 'manageInventory',
+    'manageCustomers', 'manageSuppliers', 'managePurchases', 'manageReports',
+    'manageNotifications', 'useAi',
+  ],
+  CASHIER: [
+    'viewDashboard', 'manageSales', 'manageCustomers', 'manageNotifications',
+  ],
+  STORE_ASSISTANT: [
+    'viewDashboard', 'manageInventory', 'manageNotifications',
+  ],
+};
+
+async function enrichUserFromDb(req) {
+  if (!req.user || !req.user.uid) return;
+  try {
+    const dbUser = await authRepository.findUserByFirebaseUid(req.user.uid);
+    if (dbUser) {
+      const role = dbUser.role_name || (req.user.claims && req.user.claims.role) || null;
+      req.user.id = dbUser.id;
+      req.user.email = dbUser.email || req.user.email;
+      req.user.username = dbUser.username;
+      req.user.role = role;
+      req.user.roles = role ? [role] : (req.user.roles || []);
+      req.user.accountStatus = dbUser.account_status || 'active';
+      req.user.isActive = dbUser.is_active;
+      req.user.permissions = ROLE_PERMISSIONS_MAP[role] || (req.user.permissions || []);
+      if (!req.user.claims) req.user.claims = {};
+      if (role) req.user.claims.role = role;
+      req.user.claims.permissions = req.user.permissions;
+    }
+  } catch (err) {
+    // DB enrichment failures should not block the request entirely;
+    // fall back to Firebase claims only.
+  }
+}
 
 function requireAuthentication(firebaseService) {
   return asyncHandler(async function requireAuthMiddleware(req, _res, next) {
@@ -36,6 +91,7 @@ function requireAuthentication(firebaseService) {
         claims: decodedToken.claims || {},
         token: decodedToken,
       };
+      await enrichUserFromDb(req);
       return next();
     } catch (err) {
       if (err && err instanceof ServiceUnavailableError) {
@@ -60,14 +116,20 @@ function requireAuthentication(firebaseService) {
 }
 
 function requireRole(...allowedRoles) {
-  const allowed = new Set(allowedRoles.filter(Boolean));
+  const allowed = new Set(allowedRoles.filter(Boolean).map(r => String(r).toUpperCase()));
   return function requireRoleMiddleware(req, _res, next) {
     if (!req.user) {
       return next(new AuthenticationError());
     }
     if (allowed.size === 0) return next();
-    const userRoles = Array.isArray(req.user.roles) ? req.user.roles : [];
-    const claimsRole = (req.user.claims && req.user.claims.role) || null;
+    const userRoles = Array.isArray(req.user.roles)
+      ? req.user.roles.map(r => String(r).toUpperCase())
+      : [];
+    const claimsRole = (req.user.claims && req.user.claims.role)
+      ? String(req.user.claims.role).toUpperCase()
+      : null;
+    const directRole = req.user.role ? String(req.user.role).toUpperCase() : null;
+    if (directRole && allowed.has(directRole)) return next();
     if (claimsRole && allowed.has(claimsRole)) return next();
     for (const r of userRoles) {
       if (allowed.has(r)) return next();
@@ -115,6 +177,7 @@ function optionalAuthentication(firebaseService) {
           claims: decodedToken.claims || {},
           token: decodedToken,
         };
+        await enrichUserFromDb(req);
       }
     } catch {
       // Optional auth: silently ignore invalid tokens or unavailable service

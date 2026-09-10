@@ -34,6 +34,7 @@ const { optionalAuthentication } = require('./middleware/auth.middleware');
 const { resolveTenantContext } = require('./middleware/tenant.middleware');
 
 const { registerApiRoutes } = require('./routes');
+const authRepository = require('./repositories/auth.repository');
 
 function buildServices() {
   try {
@@ -58,6 +59,16 @@ function buildServices() {
     storage: storageService,
     aiGateway: aiGatewayService,
   };
+}
+
+async function ensureIdentitySchema() {
+  try {
+    if (environment.isTest) return;
+    await authRepository.ensureAccountStatusColumn();
+    logger.info('Identity schema: account_status column ensured');
+  } catch (err) {
+    logger.warn({ err }, 'Identity schema ensure step failed (non-fatal)');
+  }
 }
 
 function createApp(dependencies = {}) {
@@ -136,4 +147,5 @@ function createApp(dependencies = {}) {
 module.exports = {
   createApp,
   buildServices,
+  ensureIdentitySchema,
 };

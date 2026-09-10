@@ -184,6 +184,51 @@ class OwnerService {
     }
   }
 
+  Future<Result<void>> startOwnerLogin({
+    required String username,
+    required String password,
+  }) async {
+    try {
+      await _signInOrCreateWithRetries(
+        create: false,
+        email: AppOwner.ownerEmail,
+        password: password,
+      );
+      return Result.success(null);
+    } catch (e) {
+      return Result.failure(
+        const AuthFailure('Invalid username or password.'),
+      );
+    }
+  }
+
+  Future<Result<OwnerProfile>> finalizeLoginSync() async {
+    try {
+      final user = _firebaseAuth?.currentUser;
+      if (user == null) {
+        return Result.failure(const AuthFailure('Session expired.'));
+      }
+      final idToken = await user.getIdToken();
+      final response = await _apiClient.post(
+        'auth/login',
+        data: {'idToken': idToken},
+      );
+
+      final profile = OwnerProfile.fromJson(response.data['data']['user']);
+      await _ownerRepository.saveProfile(profile);
+
+      return Result.success(profile);
+    } catch (e) {
+      return Result.failure(
+        const AuthFailure('Failed to sync account data.'),
+      );
+    }
+  }
+
+  Future<Result<void>> requestPasswordReset({String? email}) async {
+    return sendPasswordResetEmail(email: email);
+  }
+
   Future<Result<void>> resendOtpCode() async => requestOtpCode();
 
   Future<Result<bool>> checkVerificationStatus() async {

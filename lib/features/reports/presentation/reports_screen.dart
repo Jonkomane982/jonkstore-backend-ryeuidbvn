@@ -84,7 +84,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Widget _buildDateRangeHeader(ReportsState state) {
     final df = DateFormat('dd MMM yyyy');
     return PrimaryCard(
-      color: AppColors.primary.withOpacity(0.05),
+      color: AppColors.primary.withValues(alpha: 0.05),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -121,7 +121,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: ListTile(
               leading: CircleAvatar(
-                backgroundColor: AppColors.primary.withOpacity(0.1),
+                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                 child: Text('${index + 1}', style: const TextStyle(color: AppColors.primary)),
               ),
               title: Text(product.productName, style: AppTextStyles.subtitle),

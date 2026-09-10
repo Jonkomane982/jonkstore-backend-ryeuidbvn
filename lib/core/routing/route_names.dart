@@ -7,13 +7,13 @@ class RouteNames {
   static const String verifyEmail = 'verify-email';
   static const String businessSetup = 'business-setup';
   static const String dashboard = 'dashboard';
-  
+
   // Products
   static const String products = 'products';
   static const String productAdd = 'product-add';
   static const String productEdit = 'product-edit';
   static const String categories = 'categories';
-  
+
   // Inventory
   static const String inventory = 'inventory';
   static const String inventoryAdjustment = 'inventory-adjustment';
@@ -32,4 +32,7 @@ class RouteNames {
   static const String settings = 'settings';
   static const String employees = 'employees';
   static const String businesses = 'businesses';
+
+  /// Admin-only route for user management (list, activate, suspend, delete, change role).
+  static const String userManagement = 'user-management';
 }

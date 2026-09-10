@@ -321,3 +321,430 @@ describe('Owner Forgot Password Endpoint (/api/auth/owner/forgot-password)', () 
     expect(linkCalls[0].email).toBe(OWNER_EMAIL);
   });
 });
+
+describe('Open Registration & Public Login (Any Email Allowed)', () => {
+  const OWNER_EMAIL = 'owner@test.local';
+  const USER_EMAIL = 'user@example.com';
+
+  function setupMocks(mockOverrides = {}) {
+    jest.resetModules();
+    const tokenUser = mockOverrides.tokenUser || {
+      uid: 'firebase-uid-1',
+      email: USER_EMAIL,
+      name: 'Jane Doe',
+      email_verified: true,
+      claims: {},
+    };
+    const userRow = mockOverrides.userRow || null;
+    const createdUserRow = mockOverrides.createdUserRow || {
+      id: 'db-user-1',
+      firebase_uid: 'firebase-uid-1',
+      email: USER_EMAIL,
+      username: 'janedoe',
+      role_name: 'CASHIER',
+      is_active: false,
+      account_status: 'pending',
+      last_login_at: null,
+      created_at: new Date().toISOString(),
+    };
+
+    jest.doMock('../src/repositories/auth.repository', () => ({
+      findUserByFirebaseUid: jest.fn(async (_uid) => userRow),
+      findUserByEmail: jest.fn(async (_email) => userRow),
+      findUserById: jest.fn(async (id) => ({ ...createdUserRow, id })),
+      createUser: jest.fn(async (data) => ({
+        ...createdUserRow,
+        email: data.email,
+        firebase_uid: data.firebase_uid,
+        username: data.username || createdUserRow.username,
+        role_name: data.role_name || createdUserRow.role_name,
+        account_status: data.account_status || createdUserRow.account_status,
+        is_active: (data.account_status || createdUserRow.account_status) === 'active',
+      })),
+      updateLastLogin: jest.fn(async (_id) => null),
+      updateUserStatus: jest.fn(async (id, status) => ({
+        id, email: USER_EMAIL, role_name: 'CASHIER', account_status: status, is_active: status === 'active',
+      })),
+      updateUserRole: jest.fn(async (id, role) => ({
+        id, email: USER_EMAIL, role_name: role, account_status: 'active',
+      })),
+      deleteUser: jest.fn(async (id) => ({ id, email: USER_EMAIL })),
+      listUsers: jest.fn(async () => ({
+        items: [createdUserRow],
+        pagination: { page: 1, limit: 50, total: 1, totalPages: 1 },
+      })),
+      ensureAccountStatusColumn: jest.fn(async () => null),
+    }));
+
+    const firebase = new MockFirebaseService({
+      configured: true,
+      tokenResult: tokenUser,
+    });
+
+    const email = new MockEmailService();
+
+    const { buildTestApp: build } = require('./test-helpers');
+    const result = build({ firebase, email });
+    return { ...result, firebase };
+  }
+
+  afterEach(() => {
+    jest.resetModules();
+    jest.restoreAllMocks();
+  });
+
+  it('POST /auth/login allows any verified email (not just owner) and creates pending CASHIER', async () => {
+    const { app, firebase } = setupMocks({
+      tokenUser: {
+        uid: 'firebase-new',
+        email: USER_EMAIL,
+        name: 'Jane',
+        email_verified: true,
+        claims: {},
+      },
+      userRow: null,
+    });
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ idToken: 'any-token-works' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.user.email).toBe(USER_EMAIL);
+    expect(res.body.data.user.role).toBe('CASHIER');
+    expect(res.body.data.user.accountStatus).toBe('pending');
+    expect(res.body.data.permissions).toEqual(expect.arrayContaining(['viewDashboard', 'manageSales']));
+    expect(res.body.message).toMatch(/pending/);
+
+    const authRepo = require('../src/repositories/auth.repository');
+    expect(authRepo.createUser).toHaveBeenCalledTimes(1);
+    expect(authRepo.createUser.mock.calls[0][0].role_name).toBe('CASHIER');
+    expect(authRepo.createUser.mock.calls[0][0].account_status).toBe('pending');
+    expect(firebase.calls.some((c) => c.token)).toBe(true);
+  });
+
+  it('POST /auth/login auto-assigns ADMIN role and active status to OWNER_EMAIL', async () => {
+    const { app } = setupMocks({
+      tokenUser: {
+        uid: 'firebase-admin',
+        email: OWNER_EMAIL,
+        name: 'Owner',
+        email_verified: true,
+        claims: {},
+      },
+      userRow: null,
+      createdUserRow: {
+        id: 'db-admin',
+        firebase_uid: 'firebase-admin',
+        email: OWNER_EMAIL,
+        username: 'owner',
+        role_name: 'ADMIN',
+        is_active: true,
+        account_status: 'active',
+        last_login_at: null,
+        created_at: new Date().toISOString(),
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ idToken: 'owner-token' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.user.email).toBe(OWNER_EMAIL);
+    expect(res.body.data.user.role).toBe('ADMIN');
+    expect(res.body.data.user.accountStatus).toBe('active');
+    expect(res.body.data.permissions).toContain('manageUsers');
+
+    const authRepo = require('../src/repositories/auth.repository');
+    const createArg = authRepo.createUser.mock.calls[0][0];
+    expect(createArg.role_name).toBe('ADMIN');
+    expect(createArg.account_status).toBe('active');
+  });
+
+  it('POST /auth/login rejects when missing idToken (400 validation)', async () => {
+    const { app } = setupMocks();
+    const res = await request(app).post('/api/auth/login').send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('POST /auth/register creates new user for any email and returns pending status', async () => {
+    const { app } = setupMocks({
+      tokenUser: {
+        uid: 'firebase-new-user',
+        email: 'newbie@test.local',
+        email_verified: true,
+        claims: {},
+      },
+      userRow: null,
+      createdUserRow: {
+        id: 'db-newbie',
+        firebase_uid: 'firebase-new-user',
+        email: 'newbie@test.local',
+        username: 'newbie',
+        role_name: 'CASHIER',
+        is_active: false,
+        account_status: 'pending',
+        created_at: new Date().toISOString(),
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ idToken: 'register-token', displayName: 'New User' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.user.accountStatus).toBe('pending');
+    expect(res.body.message).toMatch(/admin will review/);
+
+    const authRepo = require('../src/repositories/auth.repository');
+    expect(authRepo.createUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('POST /auth/register for OWNER_EMAIL grants ADMIN + active', async () => {
+    const { app } = setupMocks({
+      tokenUser: {
+        uid: 'firebase-owner-2',
+        email: OWNER_EMAIL,
+        email_verified: true,
+        claims: {},
+      },
+      userRow: null,
+      createdUserRow: {
+        id: 'db-owner-2',
+        firebase_uid: 'firebase-owner-2',
+        email: OWNER_EMAIL,
+        username: 'owner',
+        role_name: 'ADMIN',
+        is_active: true,
+        account_status: 'active',
+        created_at: new Date().toISOString(),
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ idToken: 'register-owner-token' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.user.role).toBe('ADMIN');
+    expect(res.body.data.user.accountStatus).toBe('active');
+  });
+
+  it('POST /auth/register idempotent: 200 if user already exists', async () => {
+    const { app } = setupMocks({
+      tokenUser: {
+        uid: 'firebase-exists',
+        email: 'existing@test.local',
+        email_verified: true,
+        claims: {},
+      },
+      userRow: {
+        id: 'db-existing',
+        firebase_uid: 'firebase-exists',
+        email: 'existing@test.local',
+        username: 'existing',
+        role_name: 'CASHIER',
+        is_active: true,
+        account_status: 'active',
+        created_at: new Date().toISOString(),
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ idToken: 'any' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/already exists/);
+  });
+});
+
+describe('Admin User Management Endpoints (RBAC Protected)', () => {
+  const OWNER_EMAIL = 'owner@test.local';
+  const TARGET_ID = 'db-user-1';
+
+  function setupAdminApp(actorRole = 'ADMIN') {
+    jest.resetModules();
+
+    jest.doMock('../src/repositories/auth.repository', () => ({
+      findUserByFirebaseUid: jest.fn(async (uid) => ({
+        id: uid === 'admin-uid' ? 'db-admin-1' : TARGET_ID,
+        firebase_uid: uid,
+        email: uid === 'admin-uid' ? OWNER_EMAIL : 'user@test.local',
+        username: uid === 'admin-uid' ? 'admin' : 'user',
+        role_name: actorRole,
+        account_status: 'active',
+        is_active: true,
+        last_login_at: null,
+        created_at: new Date().toISOString(),
+      })),
+      findUserById: jest.fn(async (id) => ({
+        id,
+        email: id === 'db-admin-1' ? OWNER_EMAIL : 'user@test.local',
+        username: id === 'db-admin-1' ? 'admin' : 'user',
+        role_name: id === 'db-admin-1' ? actorRole : 'CASHIER',
+        account_status: 'active',
+        is_active: true,
+        created_at: new Date().toISOString(),
+      })),
+      findUserByEmail: jest.fn(async (email) => ({
+        id: email === OWNER_EMAIL ? 'db-admin-1' : TARGET_ID,
+        email,
+        username: email.split('@')[0],
+        role_name: email === OWNER_EMAIL ? actorRole : 'CASHIER',
+        account_status: 'active',
+        is_active: true,
+      })),
+      listUsers: jest.fn(async () => ({
+        items: [
+          { id: TARGET_ID, email: 'user@test.local', username: 'user', role_name: 'CASHIER', account_status: 'pending', is_active: false, created_at: new Date().toISOString() },
+        ],
+        pagination: { page: 1, limit: 50, total: 1, totalPages: 1 },
+      })),
+      updateUserStatus: jest.fn(async (id, status) => ({
+        id, email: 'user@test.local', role_name: 'CASHIER', account_status: status, is_active: status === 'active',
+      })),
+      updateUserRole: jest.fn(async (id, role) => ({
+        id, email: 'user@test.local', role_name: role, account_status: 'active',
+      })),
+      deleteUser: jest.fn(async (id) => ({ id, email: 'user@test.local' })),
+      ensureAccountStatusColumn: jest.fn(async () => null),
+      createUser: jest.fn(async (d) => ({ id: 'x', ...d, created_at: new Date().toISOString() })),
+      updateLastLogin: jest.fn(async () => null),
+      setupNewBusiness: jest.fn(async () => ({ id: 'biz-1' })),
+    }));
+
+    const firebase = new MockFirebaseService({
+      configured: true,
+      tokenResult: {
+        uid: 'admin-uid',
+        email: OWNER_EMAIL,
+        email_verified: true,
+        claims: { role: actorRole.toLowerCase(), permissions: ['manageUsers'] },
+      },
+    });
+
+    const email = new MockEmailService();
+    const { buildTestApp: build } = require('./test-helpers');
+    return build({ firebase, email });
+  }
+
+  afterEach(() => {
+    jest.resetModules();
+    jest.restoreAllMocks();
+  });
+
+  it('GET /auth/users returns paginated users list for ADMIN role', async () => {
+    const { app } = setupAdminApp('ADMIN');
+    const res = await request(app)
+      .get('/api/auth/users')
+      .set('Authorization', 'Bearer admin-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(Array.isArray(res.body.data.items)).toBe(true);
+    expect(res.body.data.items[0].email).toBe('user@test.local');
+    expect(res.body.data.pagination.total).toBe(1);
+  });
+
+  it('GET /auth/users rejects CASHIER role with 403', async () => {
+    const { app } = setupAdminApp('CASHIER');
+    const res = await request(app)
+      .get('/api/auth/users')
+      .set('Authorization', 'Bearer cashier-token');
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('GET /auth/users rejects unauthenticated with 401', async () => {
+    const { app } = setupAdminApp('ADMIN');
+    const res = await request(app).get('/api/auth/users');
+    expect(res.status).toBe(401);
+  });
+
+  it('PATCH /auth/users/:id/status activates pending account', async () => {
+    const { app } = setupAdminApp('ADMIN');
+    const res = await request(app)
+      .patch(`/api/auth/users/${TARGET_ID}/status`)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ status: 'active' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.user.accountStatus).toBe('active');
+    expect(res.body.message).toMatch(/updated to active/);
+  });
+
+  it('PATCH /auth/users/:id/status suspends active account', async () => {
+    const { app } = setupAdminApp('ADMIN');
+    const res = await request(app)
+      .patch(`/api/auth/users/${TARGET_ID}/status`)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ status: 'suspended' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.user.accountStatus).toBe('suspended');
+  });
+
+  it('PATCH /auth/users/:id/status rejects invalid status (400)', async () => {
+    const { app } = setupAdminApp('ADMIN');
+    const res = await request(app)
+      .patch(`/api/auth/users/${TARGET_ID}/status`)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ status: 'banned' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('PATCH /auth/users/:id/role upgrades user to MANAGER', async () => {
+    const { app } = setupAdminApp('ADMIN');
+    const res = await request(app)
+      .patch(`/api/auth/users/${TARGET_ID}/role`)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ role: 'MANAGER' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.user.role).toBe('MANAGER');
+  });
+
+  it('PATCH /auth/users/:id/role rejects invalid role (400)', async () => {
+    const { app } = setupAdminApp('ADMIN');
+    const res = await request(app)
+      .patch(`/api/auth/users/${TARGET_ID}/role`)
+      .set('Authorization', 'Bearer admin-token')
+      .send({ role: 'SUPERHERO' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('DELETE /auth/users/:id removes user account', async () => {
+    const { app } = setupAdminApp('ADMIN');
+    const res = await request(app)
+      .delete(`/api/auth/users/${TARGET_ID}`)
+      .set('Authorization', 'Bearer admin-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.email).toBe('user@test.local');
+    expect(res.body.message).toMatch(/deleted/);
+  });
+
+  it('GET /auth/me includes DB-enriched user + permissions', async () => {
+    const { app } = setupAdminApp('ADMIN');
+    const res = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', 'Bearer admin-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.user.email).toBe(OWNER_EMAIL);
+    expect(res.body.data.permissions).toContain('manageUsers');
+  });
+});

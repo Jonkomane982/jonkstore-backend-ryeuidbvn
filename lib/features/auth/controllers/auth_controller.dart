@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/config/app_owner.dart';
 import '../../../providers/auth_providers.dart';
 
 class AuthState {
@@ -42,14 +41,6 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> register(String email, String password, String name) async {
-    if (email.trim().toLowerCase() != AppOwner.ownerEmail.toLowerCase()) {
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage:
-            'Registration is restricted. Only the app owner may register.',
-      );
-      return;
-    }
     state = state.copyWith(isLoading: true, errorMessage: null);
     final repository = _ref.read(authRepositoryProvider);
     final result = await repository.signUp(email, password, name);

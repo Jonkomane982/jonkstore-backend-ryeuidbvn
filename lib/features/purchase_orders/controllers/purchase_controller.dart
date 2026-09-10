@@ -76,6 +76,7 @@ class PurchaseState {
 
   double get subtotal => draftItems.fold(0, (sum, item) => sum + item.total);
   double get totalInvestment => subtotal + runnerFee;
+  double get totalAmount => totalInvestment;
   double get expectedRevenue => draftItems.fold(0, (sum, item) => sum + item.expectedRevenue);
   double get expectedProfit => expectedRevenue - totalInvestment;
   double get totalUnits => draftItems.fold(0, (sum, item) => sum + item.quantity);

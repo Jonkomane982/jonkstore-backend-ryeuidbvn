@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dio/dio.dart';
 import 'package:jonkstore/core/domain/models/supplier.dart';
 import 'package:jonkstore/core/domain/enums/sync_status.dart';
 import 'package:jonkstore/core/errors/failures.dart';
@@ -263,32 +264,42 @@ class _InMemorySupplierLocalDataSource implements SupplierLocalDataSource {
 }
 
 class _NoopApiClient extends ApiClient {
-  _NoopApiClient() : super(baseUrl: 'http://localhost');
+  _NoopApiClient();
 
   @override
-  Future<dynamic> get(
+  Future<Response<dynamic>> get(
     String path, {
     Map<String, dynamic>? queryParameters,
-    Map<String, String>? headers,
-  }) async => null;
+    Options? options,
+    CancelToken? cancelToken,
+  }) async => Response(requestOptions: RequestOptions(path: path), data: {'data': const []});
+
   @override
-  Future<dynamic> post(
+  Future<Response<dynamic>> post(
     String path, {
     dynamic data,
-    Map<String, String>? headers,
-  }) async => {'data': null};
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) async => Response(requestOptions: RequestOptions(path: path), data: {'data': null});
+
   @override
-  Future<dynamic> put(
+  Future<Response<dynamic>> put(
     String path, {
     dynamic data,
-    Map<String, String>? headers,
-  }) async => null;
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) async => Response(requestOptions: RequestOptions(path: path), data: null);
+
   @override
-  Future<dynamic> delete(
+  Future<Response<dynamic>> delete(
     String path, {
     dynamic data,
-    Map<String, String>? headers,
-  }) async => null;
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) async => Response(requestOptions: RequestOptions(path: path), data: null);
 }
 
 SupplierRepositoryImpl _buildRepo(
@@ -563,7 +574,6 @@ void main() {
             id: 'used',
             name: 'U',
             code: 'U01',
-            notes: 'INUSE marker',
           ).copyWith(notes: 'INUSE'),
         );
         final res = await repo.delete('used');
@@ -572,7 +582,7 @@ void main() {
           expect(f, isA<ValidationFailure>());
           expect(
             f.message.toLowerCase(),
-            contains('purchase') || f.message.toLowerCase().contains('in use'),
+            anyOf(contains('purchase'), contains('in use')),
           );
         });
         expect(queue.tasks.length, 0);

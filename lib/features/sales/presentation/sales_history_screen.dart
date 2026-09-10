@@ -100,7 +100,7 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
     final df = DateFormat('dd MMM');
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
-      color: AppColors.primary.withOpacity(0.05),
+      color: AppColors.primary.withValues(alpha: 0.05),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

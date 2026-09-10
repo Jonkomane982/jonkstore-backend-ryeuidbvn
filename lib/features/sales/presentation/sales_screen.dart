@@ -255,7 +255,7 @@ class _ProductGridTile extends ConsumerWidget {
           children: [
             Expanded(
               child: Container(
-                color: AppColors.primary.withOpacity(0.05),
+                color: AppColors.primary.withValues(alpha: 0.05),
                 child: const Icon(Icons.inventory_2_outlined, color: AppColors.primary, size: 32),
               ),
             ),

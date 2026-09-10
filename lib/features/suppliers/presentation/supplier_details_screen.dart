@@ -355,7 +355,7 @@ class _DetailView extends StatelessWidget {
                                   : supplier.isActive
                                   ? AppColors.secondary
                                   : AppColors.warning)
-                              .withOpacity(0.12),
+                              .withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -441,7 +441,7 @@ class _DetailView extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: AppColors.grey100.withOpacity(isDark ? 0.2 : 1),
+                    color: AppColors.grey100.withValues(alpha: isDark ? 0.2 : 1),
                     borderRadius: AppRadius.borderRadiusMd,
                   ),
                   child: Column(
@@ -894,9 +894,9 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: AppRadius.borderRadiusLg,
-        border: Border.all(color: color.withOpacity(0.15)),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
