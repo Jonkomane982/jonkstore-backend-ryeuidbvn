@@ -53,13 +53,14 @@ class _OwnerRegisterScreenState extends ConsumerState<OwnerRegisterScreen> {
     final stateAfter = ref.read(ownerAuthControllerProvider);
     
     if (stateAfter.isRegistrationStarted || stateAfter.errorMessage == null) {
-      await controller.requestOtp(email);
+      // Trigger verification code to the Super Admin for approval
+      await controller.requestOtp();
       final stateAfterOtp = ref.read(ownerAuthControllerProvider);
       
       if (stateAfterOtp.isOtpSent && mounted) {
         CustomSnackBar.showSuccess(
           context,
-          'A verification code has been sent to your email.',
+          'Account created. A verification code has been sent to the Super Admin for approval.',
         );
         context.goNamed(RouteNames.verifyEmail);
       }
@@ -90,19 +91,19 @@ class _OwnerRegisterScreenState extends ConsumerState<OwnerRegisterScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Icon(
-                    Icons.admin_panel_settings_rounded,
+                    Icons.person_add_alt_1_rounded,
                     size: 80,
                     color: Colors.green,
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   Text(
-                    'Create Account',
+                    'Join JonkStore',
                     style: AppTextStyles.headline,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'Join the JonkStore POS system. A verification code will be sent to your email.',
+                    'Create your account to access the Point of Sale system.',
                     style: AppTextStyles.bodyLarge,
                     textAlign: TextAlign.center,
                   ),
@@ -145,7 +146,7 @@ class _OwnerRegisterScreenState extends ConsumerState<OwnerRegisterScreen> {
                   const SizedBox(height: AppSpacing.xxl),
 
                   PrimaryButton(
-                    text: 'Continue',
+                    text: 'Create Account',
                     isLoading: state.isLoading,
                     onPressed: _onRegister,
                   ),
