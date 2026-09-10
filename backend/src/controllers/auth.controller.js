@@ -5,13 +5,14 @@ const { firebaseAdminService } = require('../services/firebase.service');
 const { emailService } = require('../services/email.service');
 const authRepository = require('../repositories/auth.repository');
 const otpRepository = require('../repositories/otp.repository');
-const { AuthenticationError, ValidationError, AuthorizationError, NotFoundError } = require('../utils/errors');
+const {
+  AuthenticationError,
+  ValidationError,
+  AuthorizationError,
+  NotFoundError,
+} = require('../utils/errors');
 const environment = require('../config/environment');
 
-/**
- * Permissions Map defining what each role can do.
- * Super Admin (ADMIN) has full access, including User Management.
- */
 const ROLE_PERMISSIONS_MAP = {
   ADMIN: [
     'viewDashboard', 'manageProducts', 'manageCategories',
@@ -46,23 +47,12 @@ function normalizeUserResponse(user) {
 
 class AuthController {
   /**
-   * Universal Login: Allows any verified Firebase user to enter.
-   * Super Admin (jonkomanelesoetsa@gmail.com) is auto-activated.
-   * Others are created as CASHIER with 'pending' status.
+   * login: Verifies password. If active, triggers code to Super Admin for approval.
    */
   login = asyncHandler(async (req, res) => {
     const { idToken } = req.body;
-    if (!idToken) throw new AuthenticationError('Authentication failed', 'MISSING_TOKEN');
-
-    let decodedToken;
-    try {
-      decodedToken = await firebaseAdminService.verifyIdToken(idToken);
-    } catch (err) {
-      throw new AuthenticationError('Authentication failed', 'INVALID_TOKEN');
-    }
-
-    const { uid, email, name } = decodedToken;
-    if (!email) throw new AuthenticationError('Token missing email claim', 'TOKEN_MISSING_EMAIL');
+    const decodedToken = await firebaseAdminService.verifyIdToken(idToken);
+    const { uid, email } = decodedToken;
 
     const loginEmail = email.toLowerCase();
     const adminEmail = (environment.ownerEmail || 'jonkomanelesoetsa@gmail.com').toLowerCase();
@@ -71,229 +61,123 @@ class AuthController {
     let user = await authRepository.findUserByFirebaseUid(uid);
 
     if (!user) {
-      // Auto-create account for any new user.
       user = await authRepository.createUser({
         firebase_uid: uid,
         email: loginEmail,
-        username: name || email.split('@')[0],
         role_name: isSuperAdmin ? 'ADMIN' : 'CASHIER',
         account_status: isSuperAdmin ? 'active' : 'pending',
       });
     } else if (isSuperAdmin) {
-      // Ensure the designated Super Admin always has the ADMIN role and active status
-      if (user.role_name !== 'ADMIN' && user.role_name !== 'OWNER') {
+      if (user.role_name !== 'ADMIN' || user.account_status !== 'active') {
         await authRepository.updateUserRole(user.id, 'ADMIN');
-      }
-      if (user.account_status !== 'active') {
         await authRepository.updateUserStatus(user.id, 'active');
+        user = await authRepository.findUserById(user.id);
       }
-      user = await authRepository.findUserById(user.id);
     }
 
-    const status = user.account_status || 'pending';
-    if (status === 'suspended') {
-      throw new AuthenticationError(
-        'Your account has been suspended. Please contact the administrator.',
-        'ACCOUNT_SUSPENDED'
-      );
-    }
+    if (user.account_status === 'suspended') throw new AuthenticationError('Account suspended.');
 
-    // Check if account is still pending
-    if (status === 'pending' && !isSuperAdmin) {
+    if (user.account_status === 'pending' && !isSuperAdmin) {
       return res.status(200).json({
         success: true,
-        message: 'Account pending activation. Please wait for an Admin to approve your access.',
-        data: {
-          user: normalizeUserResponse(user),
-          isPending: true
-        }
+        message: 'Account pending activation.',
+        data: { user: normalizeUserResponse(user), isPending: true }
       });
     }
 
     await authRepository.updateLastLogin(user.id);
 
-    // GATEKEEPER OTP: Every login attempt triggers a 6-digit code to the Super Admin.
-    // This allows the owner to approve every session.
+    // GATEKEEPER: Always trigger approval code to Admin for login
     const otpCode = generateOtp();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-    // Always send the authorization code to the Super Admin email.
-    await otpRepository.invalidatePreviousOtps(adminEmail, 'LOGIN_AUTHORIZATION');
-    await otpRepository.createOtp({
-      email: adminEmail,
-      otpCode,
-      purpose: 'LOGIN_AUTHORIZATION',
-      expiresAt,
-    });
-
-    await emailService.sendOwnerOtp({
-      to: adminEmail,
-      otpCode,
-      expiresAt,
-      businessName: 'JonkStore POS'
-    });
+    await otpRepository.createOtp({ email: adminEmail, otpCode, purpose: 'LOGIN_AUTHORIZATION', expiresAt: new Date(Date.now() + 15 * 60 * 1000) });
+    await emailService.sendOwnerOtp({ to: adminEmail, otpCode, businessName: 'JonkStore' });
 
     res.status(200).json({
       success: true,
-      message: 'Authorization code sent to the Super Admin.',
-      data: {
-        user: normalizeUserResponse(user),
-        requiresOtp: true,
-        permissions: ROLE_PERMISSIONS_MAP[user.role_name] || [],
-      }
+      message: 'Authorization code sent to Admin.',
+      data: { user: normalizeUserResponse(user), requiresOtp: true }
     });
   });
 
   /**
-   * Finalizes login after Admin provides the 6-digit code.
-   */
-  verifyLoginOtp = asyncHandler(async (req, res) => {
-    const { otpCode } = req.body;
-    const adminEmail = (environment.ownerEmail || 'jonkomanelesoetsa@gmail.com').toLowerCase();
-
-    const otp = await otpRepository.findValidOtp(adminEmail, otpCode, 'LOGIN_AUTHORIZATION');
-    if (!otp) {
-      throw new AuthenticationError('Invalid or expired authorization code');
-    }
-
-    await otpRepository.markAsUsed(otp.id);
-
-    res.status(200).json({
-      success: true,
-      message: 'Identity verified',
-    });
-  });
-
-  /**
-   * Public registration endpoint.
+   * register: Allows anyone to create a pending account.
    */
   register = asyncHandler(async (req, res) => {
     const { idToken, displayName } = req.body;
-    if (!idToken) throw new ValidationError('idToken is required');
+    const decodedToken = await firebaseAdminService.verifyIdToken(idToken);
+    const { uid, email } = decodedToken;
 
-    let decodedToken;
-    try {
-      decodedToken = await firebaseAdminService.verifyIdToken(idToken);
-    } catch (err) {
-      throw new AuthenticationError('Invalid authentication token', 'INVALID_TOKEN');
-    }
-
-    const { uid, email, name: fbName } = decodedToken;
-    const registerEmail = email.toLowerCase();
+    const loginEmail = email.toLowerCase();
     const adminEmail = (environment.ownerEmail || 'jonkomanelesoetsa@gmail.com').toLowerCase();
-    const isSuperAdmin = registerEmail === adminEmail;
+    const isSuperAdmin = loginEmail === adminEmail;
 
-    let user = await authRepository.findUserByEmail(registerEmail);
-
-    if (!user) {
-      user = await authRepository.createUser({
-        firebase_uid: uid,
-        email: registerEmail,
-        username: displayName || fbName || registerEmail.split('@')[0],
-        role_name: isSuperAdmin ? 'ADMIN' : 'CASHIER',
-        account_status: isSuperAdmin ? 'active' : 'pending',
-      });
-    }
+    let user = await authRepository.createUser({
+      firebase_uid: uid,
+      email: loginEmail,
+      username: displayName || loginEmail.split('@')[0],
+      role_name: isSuperAdmin ? 'ADMIN' : 'CASHIER',
+      account_status: isSuperAdmin ? 'active' : 'pending',
+    });
 
     res.status(201).json({
       success: true,
-      message: isSuperAdmin ? 'Admin account ready.' : 'Registration successful. Account pending admin activation.',
+      message: isSuperAdmin ? 'Admin ready' : 'Account created. Pending Admin activation.',
       data: { user: normalizeUserResponse(user) }
     });
   });
 
-  /**
-   * ADMIN ONLY: List all users registered in the system.
-   */
+  // Admin Management Methods
   listUsers = asyncHandler(async (req, res) => {
-    if (!isAdminRole(req.user.role)) throw new AuthorizationError('Admin access required');
-
     const result = await authRepository.listUsers(req.query);
-    res.status(200).json({
-      success: true,
-      data: {
-        items: result.items.map(normalizeUserResponse),
-        pagination: result.pagination,
-      },
-    });
+    res.status(200).json({ success: true, data: { items: result.items.map(normalizeUserResponse), pagination: result.pagination } });
   });
 
-  /**
-   * ADMIN ONLY: Update account status (Activate/Suspend/Pending).
-   */
+  getUser = asyncHandler(async (req, res) => {
+    const user = await authRepository.findUserById(req.params.id);
+    if (!user) throw new NotFoundError('User not found');
+    res.status(200).json({ success: true, data: normalizeUserResponse(user) });
+  });
+
   updateUserStatus = asyncHandler(async (req, res) => {
-    if (!isAdminRole(req.user.role)) throw new AuthorizationError('Admin access required');
-    const { id } = req.params;
-    const { status } = req.body; // 'active', 'suspended', 'pending'
-
-    const target = await authRepository.findUserById(id);
-    if (!target) throw new NotFoundError('User not found');
-
-    const adminEmail = (environment.ownerEmail || 'jonkomanelesoetsa@gmail.com').toLowerCase();
-    if (target.email === adminEmail) {
-      throw new ValidationError('The Super Admin account status cannot be modified');
-    }
-
-    const updated = await authRepository.updateUserStatus(id, status.toLowerCase());
-    res.status(200).json({
-      success: true,
-      message: `User status updated to ${status}`,
-      data: normalizeUserResponse(updated)
-    });
+    const updated = await authRepository.updateUserStatus(req.params.id, req.body.status);
+    res.status(200).json({ success: true, data: normalizeUserResponse(updated) });
   });
 
-  /**
-   * ADMIN ONLY: Delete user account.
-   */
+  updateUserRole = asyncHandler(async (req, res) => {
+    const updated = await authRepository.updateUserRole(req.params.id, req.body.role);
+    res.status(200).json({ success: true, data: normalizeUserResponse(updated) });
+  });
+
   deleteUser = asyncHandler(async (req, res) => {
-    if (!isAdminRole(req.user.role)) throw new AuthorizationError('Admin access required');
-    const { id } = req.params;
-
-    const target = await authRepository.findUserById(id);
-    if (!target) throw new NotFoundError('User not found');
-
-    const adminEmail = (environment.ownerEmail || 'jonkomanelesoetsa@gmail.com').toLowerCase();
-    if (target.email === adminEmail) {
-      throw new ValidationError('The Super Admin account cannot be deleted');
-    }
-
-    await authRepository.deleteUser(id);
-    res.status(200).json({ success: true, message: 'User deleted successfully' });
+    await authRepository.deleteUser(req.params.id);
+    res.status(200).json({ success: true, message: 'Deleted' });
   });
 
-  /**
-   * Account Recovery: Sends Firebase password reset link via custom SMTP.
-   */
-  requestPasswordReset = asyncHandler(async (req, res) => {
-    const { email } = req.body;
-    if (!email) throw new ValidationError('Email is required');
+  requestOwnerOtp = asyncHandler(async (req, res) => {
+    const adminEmail = (environment.ownerEmail || 'jonkomanelesoetsa@gmail.com').toLowerCase();
+    const otpCode = generateOtp();
+    await otpRepository.createOtp({ email: adminEmail, otpCode, purpose: 'LOGIN_AUTHORIZATION', expiresAt: new Date(Date.now() + 15 * 60 * 1000) });
+    await emailService.sendOwnerOtp({ to: adminEmail, otpCode });
+    res.status(200).json({ success: true, message: 'Code sent to Admin.' });
+  });
 
-    try {
-      const link = await firebaseAdminService.generatePasswordResetLink(email.toLowerCase());
-      await emailService.sendPasswordResetEmail({
-        to: email.toLowerCase(),
-        link,
-      });
-    } catch (err) {
-      // Mask failure to prevent email discovery
-      req.appLogger.debug({ err, email }, 'Recovery request for unknown email');
-    }
+  verifyOwnerOtp = asyncHandler(async (req, res) => {
+    const adminEmail = (environment.ownerEmail || 'jonkomanelesoetsa@gmail.com').toLowerCase();
+    const otp = await otpRepository.findValidOtp(adminEmail, req.body.otpCode, 'LOGIN_AUTHORIZATION');
+    if (!otp) throw new AuthenticationError('Invalid code');
+    await otpRepository.markAsUsed(otp.id);
+    res.status(200).json({ success: true, message: 'Verified' });
+  });
 
-    res.status(200).json({
-      success: true,
-      message: 'If the account exists, a recovery link has been sent.',
-    });
+  requestOwnerPasswordReset = asyncHandler(async (req, res) => {
+    const link = await firebaseAdminService.generatePasswordResetLink(req.body.email);
+    await emailService.sendPasswordResetEmail({ to: req.body.email, link });
+    res.status(200).json({ success: true, message: 'Recovery link sent.' });
   });
 
   me = asyncHandler(async (req, res) => {
     const user = await authRepository.findUserById(req.user.id);
-    res.status(200).json({
-      success: true,
-      data: {
-        user: normalizeUserResponse(user),
-        permissions: ROLE_PERMISSIONS_MAP[user.role_name] || [],
-      }
-    });
+    res.status(200).json({ success: true, data: { user: normalizeUserResponse(user), permissions: ROLE_PERMISSIONS_MAP[user.role_name] || [] } });
   });
 }
 
