@@ -45,14 +45,27 @@ function normalizeUserResponse(user) {
   };
 }
 
+/**
+ * Controller for User Authentication and Identity Management.
+ */
 class AuthController {
   /**
-   * login: Verifies password. If active, triggers code to Super Admin for approval.
+   * Universal Login: Allows any verified Firebase user to enter.
+   * Super Admin is automatically identified and activated.
    */
   login = asyncHandler(async (req, res) => {
     const { idToken } = req.body;
-    const decodedToken = await firebaseAdminService.verifyIdToken(idToken);
-    const { uid, email } = decodedToken;
+    if (!idToken) throw new AuthenticationError('Authentication failed', 'MISSING_TOKEN');
+
+    let decodedToken;
+    try {
+      decodedToken = await firebaseAdminService.verifyIdToken(idToken);
+    } catch (err) {
+      throw new AuthenticationError('Authentication failed', 'INVALID_TOKEN');
+    }
+
+    const { uid, email, name } = decodedToken;
+    if (!email) throw new AuthenticationError('Token missing email claim', 'TOKEN_MISSING_EMAIL');
 
     const loginEmail = email.toLowerCase();
     const adminEmail = (environment.ownerEmail || 'jonkomanelesoetsa@gmail.com').toLowerCase();
@@ -64,6 +77,7 @@ class AuthController {
       user = await authRepository.createUser({
         firebase_uid: uid,
         email: loginEmail,
+        username: name || email.split('@')[0],
         role_name: isSuperAdmin ? 'ADMIN' : 'CASHIER',
         account_status: isSuperAdmin ? 'active' : 'pending',
       });
@@ -75,61 +89,88 @@ class AuthController {
       }
     }
 
-    if (user.account_status === 'suspended') throw new AuthenticationError('Account suspended.');
+    const status = user.account_status || 'pending';
+    if (status === 'suspended') {
+      throw new AuthenticationError('Your account has been suspended.', 'ACCOUNT_SUSPENDED');
+    }
 
-    if (user.account_status === 'pending' && !isSuperAdmin) {
+    if (status === 'pending' && !isSuperAdmin) {
       return res.status(200).json({
         success: true,
-        message: 'Account pending activation.',
+        message: 'Account pending activation. Please wait for an Admin to approve your access.',
         data: { user: normalizeUserResponse(user), isPending: true }
       });
     }
 
     await authRepository.updateLastLogin(user.id);
 
-    // GATEKEEPER: Always trigger approval code to Admin for login
+    // GATEKEEPER OTP: Every login attempt triggers a 6-digit code to the Super Admin.
     const otpCode = generateOtp();
-    await otpRepository.createOtp({ email: adminEmail, otpCode, purpose: 'LOGIN_AUTHORIZATION', expiresAt: new Date(Date.now() + 15 * 60 * 1000) });
-    await emailService.sendOwnerOtp({ to: adminEmail, otpCode, businessName: 'JonkStore' });
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    await otpRepository.invalidatePreviousOtps(adminEmail, 'LOGIN_AUTHORIZATION');
+    await otpRepository.createOtp({
+      email: adminEmail,
+      otpCode,
+      purpose: 'LOGIN_AUTHORIZATION',
+      expiresAt,
+    });
+
+    await emailService.sendOwnerOtp({
+      to: adminEmail,
+      otpCode,
+      expiresAt,
+      businessName: 'JonkStore POS'
+    });
 
     res.status(200).json({
       success: true,
-      message: 'Authorization code sent to Admin.',
-      data: { user: normalizeUserResponse(user), requiresOtp: true }
+      message: 'Password verified. Authorization code sent to the Super Admin.',
+      data: {
+        user: normalizeUserResponse(user),
+        requiresOtp: true,
+        permissions: ROLE_PERMISSIONS_MAP[user.role_name] || [],
+      }
     });
   });
 
   /**
-   * register: Allows anyone to create a pending account.
+   * Public registration endpoint.
    */
   register = asyncHandler(async (req, res) => {
     const { idToken, displayName } = req.body;
     const decodedToken = await firebaseAdminService.verifyIdToken(idToken);
     const { uid, email } = decodedToken;
-
-    const loginEmail = email.toLowerCase();
+    const registerEmail = email.toLowerCase();
     const adminEmail = (environment.ownerEmail || 'jonkomanelesoetsa@gmail.com').toLowerCase();
-    const isSuperAdmin = loginEmail === adminEmail;
+    const isSuperAdmin = registerEmail === adminEmail;
 
-    let user = await authRepository.createUser({
-      firebase_uid: uid,
-      email: loginEmail,
-      username: displayName || loginEmail.split('@')[0],
-      role_name: isSuperAdmin ? 'ADMIN' : 'CASHIER',
-      account_status: isSuperAdmin ? 'active' : 'pending',
-    });
+    let user = await authRepository.findUserByEmail(registerEmail);
+
+    if (!user) {
+      user = await authRepository.createUser({
+        firebase_uid: uid,
+        email: registerEmail,
+        username: displayName || registerEmail.split('@')[0],
+        role_name: isSuperAdmin ? 'ADMIN' : 'CASHIER',
+        account_status: isSuperAdmin ? 'active' : 'pending',
+      });
+    }
 
     res.status(201).json({
       success: true,
-      message: isSuperAdmin ? 'Admin ready' : 'Account created. Pending Admin activation.',
+      message: isSuperAdmin ? 'Admin account ready.' : 'Registration successful. Account pending Admin approval.',
       data: { user: normalizeUserResponse(user) }
     });
   });
 
-  // Admin Management Methods
+  // Admin User Management
   listUsers = asyncHandler(async (req, res) => {
     const result = await authRepository.listUsers(req.query);
-    res.status(200).json({ success: true, data: { items: result.items.map(normalizeUserResponse), pagination: result.pagination } });
+    res.status(200).json({
+      success: true,
+      data: { items: result.items.map(normalizeUserResponse), pagination: result.pagination },
+    });
   });
 
   getUser = asyncHandler(async (req, res) => {
@@ -140,17 +181,26 @@ class AuthController {
 
   updateUserStatus = asyncHandler(async (req, res) => {
     const updated = await authRepository.updateUserStatus(req.params.id, req.body.status);
-    res.status(200).json({ success: true, data: normalizeUserResponse(updated) });
+    res.status(200).json({ success: true, message: `User status set to ${updated.account_status}` });
   });
 
   updateUserRole = asyncHandler(async (req, res) => {
     const updated = await authRepository.updateUserRole(req.params.id, req.body.role);
-    res.status(200).json({ success: true, data: normalizeUserResponse(updated) });
+    res.status(200).json({ success: true, message: `User role set to ${updated.role_name}` });
   });
 
   deleteUser = asyncHandler(async (req, res) => {
+    const target = await authRepository.findUserById(req.params.id);
+    if (target.email === (environment.ownerEmail || 'jonkomanelesoetsa@gmail.com')) {
+      throw new ValidationError('Cannot delete the Super Admin');
+    }
     await authRepository.deleteUser(req.params.id);
     res.status(200).json({ success: true, message: 'Deleted' });
+  });
+
+  setupBusiness = asyncHandler(async (req, res) => {
+    const business = await authRepository.setupNewBusiness(req.user.id, req.body);
+    res.status(201).json({ success: true, message: 'Business setup successful', data: { business } });
   });
 
   requestOwnerOtp = asyncHandler(async (req, res) => {
