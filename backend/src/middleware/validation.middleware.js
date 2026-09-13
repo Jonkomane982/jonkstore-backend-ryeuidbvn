@@ -9,27 +9,18 @@ const { ValidationError } = require('../utils/errors');
  * 2. validate({ body: schema, query: schema, ... }) - validates multiple targets
  */
 function validate(schemaOrMap, defaultTarget = 'body') {
-  const schemas = {};
-
-  if (schemaOrMap && typeof schemaOrMap.safeParseAsync === 'function') {
-    // Single schema provided
-    schemas[defaultTarget] = schemaOrMap;
-  } else if (typeof schemaOrMap === 'object' && schemaOrMap !== null) {
-    // Map of schemas provided (e.g. { body: schema, query: schema })
-    Object.assign(schemas, schemaOrMap);
-  } else {
-    throw new TypeError('validate() requires a Zod schema or a map of schemas');
-  }
-
-  // Final check to ensure we have safeParseAsync on all schemas
-  for (const [target, schema] of Object.entries(schemas)) {
-    if (!schema || typeof schema.safeParseAsync !== 'function') {
-      throw new TypeError(`validate() target "${target}" requires a valid Zod schema`);
-    }
-  }
-
   return async function validateMiddleware(req, _res, next) {
     try {
+      let schemas = {};
+
+      if (schemaOrMap && typeof schemaOrMap.safeParseAsync === 'function') {
+        schemas[defaultTarget] = schemaOrMap;
+      } else if (typeof schemaOrMap === 'object' && schemaOrMap !== null) {
+        schemas = schemaOrMap;
+      } else {
+        throw new TypeError('validate() requires a Zod schema or a map of schemas');
+      }
+
       for (const [target, schema] of Object.entries(schemas)) {
         if (!['body', 'params', 'query', 'headers'].includes(target)) continue;
 
@@ -50,7 +41,6 @@ function validate(schemaOrMap, defaultTarget = 'body') {
           ));
         }
 
-        // Update request with parsed/coerced data
         req[target] = result.data;
       }
       return next();

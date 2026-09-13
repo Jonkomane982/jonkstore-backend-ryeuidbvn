@@ -30,7 +30,7 @@ class AuthRepository {
   async findUserByFirebaseUid(uid) {
     const query = `
       SELECT id, firebase_uid, email, username, role_name,
-             is_active, COALESCE(account_status, 'active') AS account_status,
+             is_active, account_status,
              last_login_at, created_at
       FROM users WHERE firebase_uid = $1
     `;
@@ -41,7 +41,7 @@ class AuthRepository {
   async findUserByEmail(email) {
     const query = `
       SELECT id, firebase_uid, email, username, role_name,
-             is_active, COALESCE(account_status, 'active') AS account_status,
+             is_active, account_status,
              last_login_at, created_at
       FROM users WHERE email = $1
     `;
@@ -52,7 +52,7 @@ class AuthRepository {
   async findUserById(id) {
     const query = `
       SELECT id, firebase_uid, email, username, role_name,
-             is_active, COALESCE(account_status, 'active') AS account_status,
+             is_active, account_status,
              last_login_at, created_at
       FROM users WHERE id = $1
     `;
@@ -71,7 +71,7 @@ class AuthRepository {
       paramIdx++;
     }
     if (status) {
-      whereClauses.push(`COALESCE(account_status, 'active') = $${paramIdx}`);
+      whereClauses.push(`account_status = $${paramIdx}`);
       params.push(status.toLowerCase());
       paramIdx++;
     }
@@ -90,7 +90,7 @@ class AuthRepository {
 
     const dataQuery = `
       SELECT id, firebase_uid, email, username, role_name,
-             is_active, COALESCE(account_status, 'active') AS account_status,
+             is_active, account_status,
              last_login_at, created_at
       FROM users ${whereSql}
       ORDER BY created_at DESC
@@ -114,9 +114,8 @@ class AuthRepository {
     if (!VALID_ROLES.includes(role)) {
       throw new Error(`Invalid role: ${role}`);
     }
-    const status = VALID_STATUSES.includes((userData.account_status || '').toLowerCase())
-      ? userData.account_status.toLowerCase()
-      : (role === 'ADMIN' ? 'active' : 'pending');
+    const status = userData.account_status || (role === 'ADMIN' ? 'active' : 'pending');
+
     const query = `
       INSERT INTO users (firebase_uid, email, username, role_name, is_active, account_status)
       VALUES ($1, $2, $3, $4, $5, $6)
@@ -125,7 +124,7 @@ class AuthRepository {
     `;
     const params = [
       userData.firebase_uid,
-      userData.email,
+      userData.email.toLowerCase(),
       userData.username || userData.email.split('@')[0],
       role,
       status === 'active',
@@ -175,28 +174,11 @@ class AuthRepository {
     return res.rows[0];
   }
 
-  async getBusinessByOwnerEmail(email) {
-    const query = `
-      SELECT b.* FROM businesses b
-      JOIN owner_profiles op ON b.id = op.business_id
-      JOIN users u ON op.user_id = u.id
-      WHERE u.email = $1
-    `;
-    const res = await db.query(query, [email]);
-    return res.rows[0];
-  }
-
-  /**
-   * Creates a new business and links it to an owner profile.
-   * Atomic operation recommended to be called within a transaction context if needed,
-   * but here we provide the individual steps.
-   */
   async setupNewBusiness(ownerId, businessData) {
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
 
-      // 1. Create Business
       const businessQuery = `
         INSERT INTO businesses (name, industry)
         VALUES ($1, $2)
@@ -208,7 +190,6 @@ class AuthRepository {
       ]);
       const business = businessRes.rows[0];
 
-      // 2. Create Owner Profile
       const ownerProfileQuery = `
         INSERT INTO owner_profiles (user_id, business_id, full_name)
         VALUES ($1, $2, $3)
@@ -219,9 +200,6 @@ class AuthRepository {
         business.id,
         businessData.ownerFullName
       ]);
-
-      // 3. Update User Role to OWNER if not already
-      await client.query('UPDATE users SET role_name = $1 WHERE id = $2', ['OWNER', ownerId]);
 
       await client.query('COMMIT');
       return business;
